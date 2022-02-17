@@ -1704,8 +1704,8 @@ int main(int argc, char **argv)
 
     while (!intflg) {
         /* accept remote console connection */
-        accept_sock(sock,con);
-        sleepms(100);
+        /*accept_sock(sock,con);
+        sleepms(100);*/
     }
     /* stop rtk server */
     stopsvr(NULL);

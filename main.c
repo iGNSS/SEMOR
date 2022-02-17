@@ -3,41 +3,45 @@
 #include <signal.h>
 #include <wait.h>
 #include <string.h>
+#include <fcntl.h>
+
+void close_io(void){
+    close(STDIN_FILENO);
+    //close(STDOUT_FILENO);
+    close(STDERR_FILENO);
+}
 
 int main(){
     pid_t str2str_pid, rtkrcv1_pid, rtkrcv2_pid;
-    char cmd[20];
-
-    int status1, status2, status3;
+    char cmd;
 
     char *const str2str_args[] = {"/home/pi/REPOSITORY/SEMOR/RTKLIB-b34e/app/consapp/str2str/gcc/str2str", "-in", "tcpcli://192.168.2.91:8081", "-out", "tcpsvr://:8085", "-out", "tcpsvr://:8086", NULL};
     char *const rtkrcv1_args[] = {"/home/pi/REPOSITORY/SEMOR/RTKLIB-b34e/app/consapp/rtkrcv/gcc/rtkrcv", "-s", "-o", "/home/pi/REPOSITORY/SEMOR/conf/test1.conf", NULL};
     char *const rtkrcv2_args[] = {"/home/pi/REPOSITORY/SEMOR/RTKLIB-b34e/app/consapp/rtkrcv/gcc/rtkrcv", "-s", "-o", "/home/pi/REPOSITORY/SEMOR/conf/test2.conf", NULL};
-//home/pi/REPOSITORY/raw_data_from_ublox/output_ubx/raw_obs_LIGE_20220251500.ubx
+
     //Avvio str2str
     if ((str2str_pid = fork()) == -1){
         perror("fork error: str2str");
     }
     else if (str2str_pid == 0) {
+        close_io();
         execv(str2str_args[0], str2str_args); //da cambiare con bin/str2str
-        printf("execv error (str2str)");
+        printf("\nexecv error (str2str)");
     }
     else{
-        printf("str2str pid: %d", (int)str2str_pid);
+        printf("\nstr2str pid: %d", (int)str2str_pid);
     }
 
     //Avvio prima istanza di rtkrcv
-
     if ((rtkrcv1_pid = fork()) == -1){
-        
         perror("fork error: rtkrcv1");
     }
     else if (rtkrcv1_pid == 0) {
-        printf("rtkrcv1 pid: %d", (int)rtkrcv1_pid);
+        close_io();
         execv(rtkrcv1_args[0], rtkrcv1_args); //da cambiare con bin/rtkrcv
-        printf("execv error (rtkrcv1)");
+        printf("\nexecv error (rtkrcv1)");
     }else{
-        printf("rtkrcv1 pid: %d", (int)rtkrcv1_pid);
+        printf("\nrtkrcv1 pid: %d", (int)rtkrcv1_pid);
     }
 
     //Avvio seconda istanza di rtkrcv
@@ -47,40 +51,32 @@ int main(){
         perror("fork error: rtkrcv2");
     }
     else if (rtkrcv2_pid == 0) {
-        printf("rtkrcv2 pid: %d", (int)rtkrcv2_pid);
+        close_io();
         execv(rtkrcv2_args[0], rtkrcv2_args); //da cambiare con bin/rtkrcv
-        printf("execv error (rtkrcv2)");
+        printf("\nexecv error (rtkrcv2)");
     }
     else{
-        printf("rtkrcv2 pid: %d", (int)rtkrcv2_pid);
+        printf("\nrtkrcv2 pid: %d", (int)rtkrcv2_pid);
     }
 
-    //Controllo
-    waitpid(str2str_pid, &status1, 0);
-    if (WIFSIGNALED(status1) || !WEXITSTATUS(status1)){
-        printf("Error with str2str process\n");
-    }
-
-    waitpid(rtkrcv1_pid, &status2, 0);
-    if (WIFSIGNALED(status2) || !WEXITSTATUS(status2)){
-        printf("Error with rtkrcv process (first instance)\n");
-    }
-
-    waitpid(rtkrcv2_pid, &status3, 0);
-    if (WIFSIGNALED(status3) || !WEXITSTATUS(status3)){
-        printf("Error with rtkrcv process (second instance)\n");
-    }
+    printf("\n");
     do{
         printf("SEMOR> ");
-        scanf("%s", cmd);
-    }while(strcmp(cmd, "stop") != 0 && strcmp(cmd, "STOP") != 0);
+        scanf("%c", &cmd);
+    }while(cmd != 'q' && cmd != 'Q');
 
-    kill(str2str_pid, SIGTERM);
-    kill(rtkrcv1_pid, SIGTERM);
-    kill(rtkrcv2_pid, SIGTERM);
+    if(kill(str2str_pid, SIGKILL) == -1){
+        perror("Error killing str2str process");
+    }
+    if(kill(rtkrcv1_pid, SIGKILL) == -1){
+        perror("Error killing rtkrcv1 process");
+    }
+    if(kill(rtkrcv2_pid, SIGKILL) == -1){
+        perror("Error killing rtkrcv2 process");
+    }
 
 
-    printf("Program stopped.");
+    printf("\nSEMOR stopped.\n");
 
     return 0;
 }
