@@ -1,9 +1,9 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <signal.h>
-#include <wait.h>
 #include <string.h>
 #include <fcntl.h>
+#include "src/semor.h"
 
 void close_io(void){
     close(STDIN_FILENO);
@@ -12,7 +12,6 @@ void close_io(void){
 }
 
 int main(){
-    pid_t str2str_pid, rtkrcv1_pid, rtkrcv2_pid;
     char cmd;
 
     char *const str2str_args[] = {"/home/pi/REPOSITORY/SEMOR/RTKLIB-b34e/app/consapp/str2str/gcc/str2str", "-in", "tcpcli://192.168.2.91:8081", "-out", "tcpsvr://:8085", "-out", "tcpsvr://:8086", NULL};
@@ -20,7 +19,7 @@ int main(){
     char *const rtkrcv2_args[] = {"/home/pi/REPOSITORY/SEMOR/RTKLIB-b34e/app/consapp/rtkrcv/gcc/rtkrcv", "-s", "-o", "/home/pi/REPOSITORY/SEMOR/conf/test2.conf", NULL};
 
     //Avvio str2str
-    if ((str2str_pid = fork()) == -1){
+    /*if ((str2str_pid = fork()) == -1){
         perror("fork error: str2str");
     }
     else if (str2str_pid == 0) {
@@ -30,7 +29,7 @@ int main(){
     }
     else{
         printf("\nstr2str pid: %d", (int)str2str_pid);
-    }
+    }*/
 
     //Avvio prima istanza di rtkrcv
     if ((rtkrcv1_pid = fork()) == -1){
@@ -57,24 +56,24 @@ int main(){
     }
     else{
         printf("\nrtkrcv2 pid: %d", (int)rtkrcv2_pid);
+        
     }
 
+    /*
+    SEMOR inizia effettivamente qui
+    Prendo le due soluzioni e le confronto
+    */
+    start_processing();
+
+
+    //Input per terminazione SEMOR
     printf("\n");
     do{
         printf("SEMOR> ");
         scanf("%c", &cmd);
     }while(cmd != 'q' && cmd != 'Q');
 
-    if(kill(str2str_pid, SIGKILL) == -1){
-        perror("Error killing str2str process");
-    }
-    if(kill(rtkrcv1_pid, SIGKILL) == -1){
-        perror("Error killing rtkrcv1 process");
-    }
-    if(kill(rtkrcv2_pid, SIGKILL) == -1){
-        perror("Error killing rtkrcv2 process");
-    }
-
+    close_semor(0);
 
     printf("\nSEMOR stopped.\n");
 
