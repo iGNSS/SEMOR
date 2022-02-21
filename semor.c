@@ -7,7 +7,7 @@
 
 void close_io(void){
     close(STDIN_FILENO);
-    //close(STDOUT_FILENO);
+    close(STDOUT_FILENO);
     close(STDERR_FILENO);
 }
 
@@ -18,32 +18,32 @@ int main(){
     char *const rtkrcv1_args[] = {"/home/pi/REPOSITORY/SEMOR/RTKLIB-b34e/app/consapp/rtkrcv/gcc/rtkrcv", "-s", "-o", "/home/pi/REPOSITORY/SEMOR/conf/test1.conf", NULL};
     char *const rtkrcv2_args[] = {"/home/pi/REPOSITORY/SEMOR/RTKLIB-b34e/app/consapp/rtkrcv/gcc/rtkrcv", "-s", "-o", "/home/pi/REPOSITORY/SEMOR/conf/test2.conf", NULL};
 
-    //Avvio str2str
-    /*if ((str2str_pid = fork()) == -1){
+    //Execute str2str
+    if ((str2str_pid = fork()) == -1){
         perror("fork error: str2str");
     }
     else if (str2str_pid == 0) {
         close_io();
-        execv(str2str_args[0], str2str_args); //da cambiare con bin/str2str
+        execv(str2str_args[0], str2str_args);
         printf("\nexecv error (str2str)");
     }
     else{
         printf("\nstr2str pid: %d", (int)str2str_pid);
-    }*/
+    }
 
-    //Avvio prima istanza di rtkrcv
+    //Execute first rtkrcv instance
     if ((rtkrcv1_pid = fork()) == -1){
         perror("fork error: rtkrcv1");
     }
     else if (rtkrcv1_pid == 0) {
         close_io();
-        execv(rtkrcv1_args[0], rtkrcv1_args); //da cambiare con bin/rtkrcv
+        execv(rtkrcv1_args[0], rtkrcv1_args);
         printf("\nexecv error (rtkrcv1)");
     }else{
         printf("\nrtkrcv1 pid: %d", (int)rtkrcv1_pid);
     }
 
-    //Avvio seconda istanza di rtkrcv
+    //Execute second rtkrcv instance
 
     if ((rtkrcv2_pid = fork()) == -1){
         
@@ -60,17 +60,16 @@ int main(){
     }
 
     /*
-    SEMOR inizia effettivamente qui
-    Prendo le due soluzioni e le confronto
+    Semor starts here
     */
     start_processing();
 
 
-    //Input per terminazione SEMOR
+    //Stop semor
     printf("\n");
+    printf("SEMOR: press q to stop\n");
     do{
-        printf("SEMOR> ");
-        scanf("%c", &cmd);
+        cmd = getchar();
     }while(cmd != 'q' && cmd != 'Q');
 
     close_semor(0);
