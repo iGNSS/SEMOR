@@ -8,13 +8,21 @@ Il programma avvia:
 - 2 istanze di rtkrcv prendono i dati dalle porte 8085 e 8086 e mandano l'ouput rispettivamente sulle porte 8090 e 8091
 
 
+<<<<<<< HEAD
 Ai 3 processi precedenti viene chiuso standard input ed output da terminale poiché non necessario se non inutile per SEMOR.
+=======
+Ai 3 processi precedenti viene chiuso input e output da terminale poiché non necessario se non inutile per SEMOR.
+>>>>>>> 7a920fe90f3041cc04569c2a2289b326a9aceed7
 
 I 3 processi verranno chiusi al termine di SEMOR (inviando 'q' o 'Q') o in caso di errore (gestito nel codice) tramite la system call kill().
 
 Gli errori gestiti dal codice conterranno la parola "SEMOR", per tutti gli altri errori bisogna terminare manualmente i 3 processi di RTKLIB (vedi la riga sotto).
 
+<<<<<<< HEAD
 Se SEMOR dovesse arrestarsi in modo anomalo per un errore non gestito nel codice, è possibile terminare manualmente i processi utilizzando il comando "kill <pid>", dandogli come input i pid che si trovano nel file pids.txt nella directory root del progetto.
+=======
+Se SEMOR dovesse arrestarsi in modo anonimo per un errore non gestito nel codice, è possibile terminare manualmente i processi utilizzando il comando "kill <pid>", dandogli come input i pid che si trovano nel file pids.txt nella directory root del progetto.
+>>>>>>> 7a920fe90f3041cc04569c2a2289b326a9aceed7
 
 I dati possono arrivare sfasati di un bel po' di secondi, quindi si mantiene una storica dei dati ricevuti con MAX_HISTORY (default 30) elementi (sia per GPS che per GALILEO)
 
