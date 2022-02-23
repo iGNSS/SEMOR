@@ -16,10 +16,11 @@ int main(){
     str2str_pid = rtkrcv1_pid = rtkrcv2_pid = -1;
 
     char *const str2str_args[] = {"/home/pi/REPOSITORY/SEMOR/RTKLIB-b34e/app/consapp/str2str/gcc/str2str", "-in", "tcpcli://192.168.2.91:8081", "-out", "tcpsvr://:8085", "-out", "tcpsvr://:8086", NULL};
-    char *const rtkrcv1_args[] = {"/home/pi/REPOSITORY/SEMOR/RTKLIB-b34e/app/consapp/rtkrcv/gcc/rtkrcv", "-s", "-o", "/home/pi/REPOSITORY/SEMOR/conf/rtk4pid.conf", NULL};
-    char *const rtkrcv2_args[] = {"/home/pi/REPOSITORY/SEMOR/RTKLIB-b34e/app/consapp/rtkrcv/gcc/rtkrcv", "-s", "-o", "/home/pi/REPOSITORY/SEMOR/conf/ppp4pid_navcast.conf", NULL};
+    char *const rtkrcv1_args[] = {"/home/pi/REPOSITORY/SEMOR/RTKLIB-b34e/app/consapp/rtkrcv/gcc/rtkrcv", "-s", "-o", "/home/pi/REPOSITORY/SEMOR/conf/rtk4pid.conf", NULL}; //rtk4pid.conf
+    char *const rtkrcv2_args[] = {"/home/pi/REPOSITORY/SEMOR/RTKLIB-b34e/app/consapp/rtkrcv/gcc/rtkrcv", "-s", "-o", "/home/pi/REPOSITORY/SEMOR/conf/ppp4pid_navcast.conf", NULL}; //ppp4pid_navcast.conf
 
     //Execute str2str
+    
     if ((str2str_pid = fork()) == -1){
         perror("SEMOR: fork error: str2str");
         close_semor(1);
@@ -31,7 +32,7 @@ int main(){
         close_semor(1);
     }
     else{
-        //printf("\nstr2str pid: %d", (int)str2str_pid); //debug
+        printf("\nstr2str pid: %d", (int)str2str_pid); //debug
     }
 
     //Execute first rtkrcv instance
@@ -70,6 +71,8 @@ int main(){
     FILE *pids = fopen("/home/pi/REPOSITORY/SEMOR/pids.txt", "w");
     fprintf(pids, "str2str: %d\nrtkrcv(1): %d\nrtkrcv(2): %d", str2str_pid, rtkrcv1_pid, rtkrcv2_pid);
     fclose(pids);
+    
+
 
     /*
     Semor starts here

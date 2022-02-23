@@ -13,16 +13,21 @@
 #include <signal.h>
 #include <string.h>
 #include <math.h>
+#include <sys/poll.h>
 
 #define PORT1 "8090"
 #define PORT2 "8091"
 #define FILE_PATH "/home/pi/REPOSITORY/SEMOR/output.txt"
-#define MAX_HISTORY 20
 
-static gnss_sol_t gps[MAX_HISTORY];
-static gnss_sol_t galileo[MAX_HISTORY];
+static gnss_sol_t gps;
+static gnss_sol_t galileo;
 FILE *file;
-int socketfd1, socketfd2;
+FILE *p;
+int instance_no[2] = {0, 1};
+pthread_t id[2];
+
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
 
 //Close SEMOR and all processes started by it (rtkrcv and str2str)
 void close_semor(int status){
@@ -36,8 +41,8 @@ void close_semor(int status){
         perror("SEMOR: Error killing rtkrcv(2) process");
     }
     fclose(file);
-    close(socketfd1);
-    close(socketfd2);
+    if(p != NULL)
+        fclose(p);
     exit(status);
 }
 
@@ -49,7 +54,7 @@ gnss_sol_t str2gnss(char str[MAXSTR]){
     strcpy(copy, str);
 
     gnss.time.week = atoi(strtok(copy, " "));
-    gnss.time.sec = (int)strtod(strtok(NULL, " "), &eptr);
+    gnss.time.sec = atoi(strtok(NULL, " "));
     gnss.lat = strtod(strtok(NULL, " "), &eptr);
     gnss.lng = strtod(strtok(NULL, " "), &eptr);
     gnss.height = strtod(strtok(NULL, " "), &eptr);
@@ -74,125 +79,131 @@ void gnss2str(char* str, gnss_sol_t gnss){
     gnss.age, gnss.ratio);
 }
 
-void* sock_open(void* p){
+void* handle_connection(void* inst_no){
+    int ins = *((int *) inst_no);
     struct addrinfo hints, *res;
     int status;
-    char buf1[MAXSTR], buf2[MAXSTR];
+    char buf[MAXSTR];
     int offset = 0;
-    int curr = 0; //next index in hirtory (MAX_HISTORY % curr)
-    int i, j; //counter
+    int nbytes;
+    char sol1[MAXSTR], sol2[MAXSTR];
+    int socketfd;
+    char port[5];
 
     memset(&hints, 0, sizeof hints);
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
     hints.ai_family = AF_INET; 
 
-    if ((status = getaddrinfo(NULL,PORT1, &hints, &res)) != 0) {
+    if(ins == 0){
+        strcpy(port, PORT1);
+    }
+    else{
+        strcpy(port, PORT2);
+    }
+    if ((status = getaddrinfo(NULL,port, &hints, &res)) != 0) {
         fprintf(stderr, "SEMOR: getaddrinfo: %s\n", gai_strerror(status));
         close_semor(1);
     }
 
     //Socket creation and connection
-    socketfd1 = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-    if(socketfd1 == -1){
+    socketfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    if(socketfd == -1){
         perror("SEMOR socket1()");
         close_semor(1);
     }
     do{
-        if(connect(socketfd1, res->ai_addr, res->ai_addrlen) == -1){
+        if(connect(socketfd, res->ai_addr, res->ai_addrlen) == -1){
             if(errno == ECONNREFUSED) continue; //Wait for rtkrcv to start and to send data
-            perror("SEMOR connect1()");
-            close_semor(1);
         }
         break; //Stop while
     }while(1);
 
-    if ((status = getaddrinfo(NULL,PORT2, &hints, &res)) != 0) {
-        fprintf(stderr, "SEMOR: getaddrinfo: %s\n", gai_strerror(status));
-        close_semor(1);
-    }
-
-    socketfd2 = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-    if(socketfd2 == -1){
-        perror("SEMOR socket2()");
-        close_semor(1);
-    }
-    do{
-        if(connect(socketfd2, res->ai_addr, res->ai_addrlen) == -1){
-            if(errno == ECONNREFUSED) continue; //Wait for rtkrcv to start and to send data
-            perror("SEMOR connect2()");
-            close_semor(1);
-        }
-        break; //Stop while
-    }while(1);
     free(res);
 
-    //Read loop
-    while(1){ //Stops when SEMOR ends
+    while(1){
         offset = 0;
         do{
-            if(read(socketfd1, buf1+offset, 1) == -1){
+            nbytes = read(socketfd, buf+offset, 1);
+            if(nbytes == -1){
                 perror("SEMOR read socket1");
                 close_semor(1);
+            }else if(nbytes == 0){ // Rtkrcv1 is down
+                printf("rtkrcv down\n"); //debug
+                continue;
             }
             offset++;
-        }while(buf1[offset-1] != '\r' && buf1[offset-1] != '\n');
-        buf1[offset-1] = '\0';
-        offset = 0;
-        do{
-            if(read(socketfd2, buf2+offset, 1) == -1){
-                perror("SEMOR read socket2");
-                close_semor(1);
-            }
-            offset++;
-        }while(buf2[offset-1] != '\r' && buf2[offset-1] != '\n');
-        buf2[offset-1] = '\0';
-
-        if(strlen(buf1) == 0){ //Rtkrcv sends one empty line between messages
+        }while(buf[offset-1] != '\r' && buf[offset-1] != '\n');
+        buf[offset-1] = '\0';
+        
+        if(strstr(buf, "lat") || strstr(buf, "latitude") || strlen(buf) < 5){ //Se la linea letta contiene fa parte dell'header
             continue;
         }
-        gps[curr] = str2gnss(buf1);
-        galileo[curr] = str2gnss(buf2);
-        for(i = 0; i < MAX_HISTORY; i++){
-            if(gps[curr].time.sec == galileo[i].time.sec){
+        fprintf(p, "(%d) %s\n", ins, buf);
+        fflush(p);
+        pthread_mutex_lock(&mutex);
+        if(ins == 0){
+            if(gps.time.week != 0){ //La soluzione gps precedente non è stata consumata, la invio da sola prima di quella corrente
+                gnss2str(sol1, gps);
+                fprintf(file, "ALONE %s\n", sol1);
+                gps.time.week = 0;
+            }
+            gps = str2gnss(buf);
+            if(galileo.time.week != 0 && gps.time.sec == galileo.time.sec){ //E' arrivata prima la soluzione galileo
                 //Add line with both solution side by side to the file
-                gnss2str(buf1, gps[curr]);
-                gnss2str(buf2, galileo[i]);
-                fprintf(file, "%s\n%s\n", buf1, buf2);
-                break;
+                gnss2str(sol1, gps);
+                gnss2str(sol2, galileo);
+                fprintf(file, "%s ||||||||| %s\n", sol1, sol2);
+                //Dico alle prossime iterazioni che i precedenti valori sono già stati consumati
+                gps.time.week = 0;
+                galileo.time.week = 0;
+            }
+        }else{
+            if(galileo.time.week != 0){ //La soluzione galileo precedente non è stata consumata, la invio da sola prima di quella corrente
+                gnss2str(sol2, galileo);
+                fprintf(file, "ALONE %s\n", sol2);
+                galileo.time.week = 0;
+            }
+            galileo = str2gnss(buf);
+            if(gps.time.week != 0 && gps.time.sec == galileo.time.sec){ //E' arrivata prima la soluzione gps
+                //Add line with both solution side by side to the file
+                gnss2str(sol1, gps);
+                gnss2str(sol2, galileo);
+                fprintf(file, "%s ||||||||| %s\n", sol1, sol2);
+                gps.time.week = 0;
+                galileo.time.week = 0;
             }
         }
-        for(i = 0; i < MAX_HISTORY; i++){
-            if(gps[i].time.sec == galileo[curr].time.sec){
-                //Add line with both solution side by side to the file
-                gnss2str(buf1, gps[i]);
-                gnss2str(buf2, galileo[curr]);
-                fprintf(file, "%s\n%s\n", buf1, buf2);
-                break;
-            }
-        }
-
-        curr = (curr+1) % MAX_HISTORY;
         fflush(file);
+        pthread_mutex_unlock(&mutex);
     }
-    free(res);
+
+
 }
 
-
 void start_processing(void){
-    pthread_t id;
-    int res;
+    int ret;
+    //int instance_no[2];
+    p = fopen("prova.txt", "w");
 
     file = fopen(FILE_PATH, "w");
     if(file == NULL){
         perror("SEMOR fopen()");
     }
     fflush(file);
-    //Start connection 1
-    res = pthread_create(&id, NULL, sock_open, NULL);
-    if(res != 0){
-        errno = res;
+    //Ho bisogno di avviare gli handler in thread separati in caso una delle due istanze di rtkrcv non sia up in un determinato momento
+    //Avvio handler per rtkrcv1
+    ret = pthread_create(&id[0], NULL, handle_connection, (void *)&instance_no[0]);
+    if(ret != 0){
+        errno = ret;
         perror("SEMOR: thread create 0");
+        close_semor(1);
+    }
+    //Avvio handler per rtkrcv2
+    ret = pthread_create(&id[1], NULL, handle_connection, (void *)&instance_no[1]);
+    if(ret != 0){
+        errno = ret;
+        perror("SEMOR: thread create 1");
         close_semor(1);
     }
 }

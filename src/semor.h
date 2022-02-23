@@ -7,13 +7,6 @@
 
 pid_t str2str_pid, rtkrcv1_pid, rtkrcv2_pid;
 
-/*typedef struct solution{
-    tow_t time;
-    gnss_sol_t gps;
-    gnss_sol_t galileo;
-    ins_sol_t ins;
-} sol_t;*/
-
 typedef struct tow{ /* Time Of Week */
     int week;
     int sec;
@@ -34,6 +27,8 @@ typedef struct gnss_solution{
     double sdun;
     float age;
     float ratio;
+
+    //int compared; //If it has no matches for its epoch, it will be printed alone with no comparisons
 } gnss_sol_t;
 
 

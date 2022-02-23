@@ -1,3 +1,3 @@
-str2str: 16553
-rtkrcv(1): 16554
-rtkrcv(2): 16555
+str2str: 11486
+rtkrcv(1): 11487
+rtkrcv(2): 11488
