@@ -14,6 +14,7 @@ Commands to be executed inside the SEMOR folder:
   make
   cd RTKLIB-b34e/app/consapp/rtkrcv/gcc/
   make
+  cd ../../../../..
   cd RTKLIB-b34e/app/consapp/str2str/gcc/
   make
 ```
