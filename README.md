@@ -1,21 +1,31 @@
-# SEMOR
-File di configurazione usati per debug:
-- rtk4pid.conf
-- ppp4pid_navcast.conf
+### Setup SEMOR
 
-Il programma avvia:
-- un'istanza di str2str che prende come input i dati che arrivano dalla porta 8081 e manda output sulle porte 8085 (per rtk4pid) e 8086 (per ppp4pid_navcast)
-- 2 istanze di rtkrcv prendono i dati dalle porte 8085 e 8086 e mandano l'ouput rispettivamente sulle porte 8090 e 8091
+For now the software requires the absolute path to the SEMOR folder.
 
-Ai 3 processi precedenti viene chiuso standard input ed output da terminale poiché non necessario se non inutile per SEMOR.
+In order to change this path you must:
+- note the absolute path of the SEMOR folder
+- open the semor.c file in the SEMOR folder and modify every "/home/pi/REPOSITORY/SEMOR/" to the path of your SEMOR folder
+- do the same for the client.c inside the src folder
 
-I 3 processi verranno chiusi al termine di SEMOR (inviando 'q' o 'Q') o in caso di errore (gestito nel codice) tramite la system call kill().
+### Compile
+You need to compile 3 files: semor.c, rtkrcv.c and str2str.c as shown below.
+Commands to be executed inside the SEMOR folder:
+```
+  make
+  cd RTKLIB-b34e/app/consapp/rtkrcv/gcc/
+  make
+  cd RTKLIB-b34e/app/consapp/str2str/gcc/
+  make
+```
+### Execute
+Commands to be executed inside the SEMOR folder:
+```
+  cd bin
+  ./semor
+```
+  
+In order to stop SEMOR you need to send 'q' to the terminal.
+  
+The output is written in the output.txt file inside the root folder (SEMOR).
 
-Gli errori gestiti dal codice conterranno la parola "SEMOR", per tutti gli altri errori bisogna terminare manualmente i 3 processi di RTKLIB (vedi la riga sotto).
-
-Se SEMOR dovesse arrestarsi in modo anomalo per un errore non gestito nel codice, è possibile terminare manualmente i processi utilizzando il comando "kill <pid>", dandogli come input i pid che si trovano nel file pids.txt nella directory root del progetto.
-
-I dati possono arrivare sfasati di un bel po' di secondi, quindi si mantiene una storica dei dati ricevuti con MAX_HISTORY (default 30) elementi (sia per GPS che per GALILEO)
-
-Per debug, il risultato dell'elaborazione è scritto sul file output.txt.
-
+The output is not written immediately, SEMOR have to wait for input from rtkrcv instances.
