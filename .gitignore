@@ -1,3 +1,7 @@
 output.txt
 pids.txt
+prova.txt
+test1.pos
+test2.pos
+rtkrcv.nav
 bin/*.o
