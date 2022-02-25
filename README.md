@@ -4,7 +4,7 @@ For now the software requires the absolute path to the SEMOR folder.
 
 In order to change this path you must:
 - note the absolute path of the SEMOR folder
-- open the semor.c file in the SEMOR folder and modify every "/home/pi/REPOSITORY/SEMOR/" to the path of your SEMOR folder
+- open the semor.c file in the SEMOR folder and modify every "/home/semor/SEMOR/" to the path of your SEMOR folder
 - do the same for the client.c inside the src folder
 
 ### Compile
