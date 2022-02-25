@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <unistd.h>
 #include <signal.h>
 #include <string.h>
 #include <fcntl.h>
@@ -13,13 +12,15 @@ void close_io(void){
 
 int main(){
     char cmd;
-    str2str_pid = rtkrcv1_pid = rtkrcv2_pid = -1;
+    pid_t str2str_pid, rtkrcv1_pid, rtkrcv2_pid;
 
     char *const str2str_args[] = {"/home/semor/SEMOR/RTKLIB-b34e/app/consapp/str2str/gcc/str2str", "-in", "tcpcli://192.168.2.91:8081", "-out", "tcpsvr://:8085", "-out", "tcpsvr://:8086", NULL};
     char *const rtkrcv1_args[] = {"/home/semor/SEMOR/RTKLIB-b34e/app/consapp/rtkrcv/gcc/rtkrcv", "-s", "-o", "/home/pi/REPOSITORY/SEMOR/conf/rtk4pid.conf", NULL}; //rtk4pid.conf
     char *const rtkrcv2_args[] = {"/home/semor/SEMOR/RTKLIB-b34e/app/consapp/rtkrcv/gcc/rtkrcv", "-s", "-o", "/home/pi/REPOSITORY/SEMOR/conf/ppp4pid_navcast.conf", NULL}; //ppp4pid_navcast.conf
 
     //Execute str2str
+
+    str2str_pid = rtkrcv1_pid = rtkrcv2_pid = -1;
     
     if ((str2str_pid = fork()) == -1){
         perror("SEMOR: fork error: str2str");

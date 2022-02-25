@@ -5,7 +5,6 @@
 #include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <netinet/in.h>
@@ -17,7 +16,7 @@
 
 #define PORT1 "8090"
 #define PORT2 "8091"
-#define FILE_PATH "/home/pi/REPOSITORY/SEMOR/output.txt"
+#define FILE_PATH "/home/semor/SEMOR/output.txt"
 
 static gnss_sol_t gps;
 static gnss_sol_t galileo;
@@ -25,6 +24,7 @@ FILE *file;
 FILE *p;
 int instance_no[2] = {0, 1};
 pthread_t id[2];
+pid_t str2str_pid, rtkrcv1_pid, rtkrcv2_pid;
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 

@@ -5,6 +5,7 @@
         "string.h": "c",
         "pthread.h": "c",
         "type_traits": "c",
-        "stdio.h": "c"
+        "stdio.h": "c",
+        "fcntl.h": "c"
     }
 }

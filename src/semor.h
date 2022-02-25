@@ -5,7 +5,7 @@
 
 #define MAXSTR 1024
 
-pid_t str2str_pid, rtkrcv1_pid, rtkrcv2_pid;
+extern pid_t str2str_pid, rtkrcv1_pid, rtkrcv2_pid;
 
 typedef struct tow{ /* Time Of Week */
     int week;
