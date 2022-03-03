@@ -14,17 +14,23 @@
 #include <math.h>
 #include <sys/poll.h>
 
-#define PORT1 "8090"
-#define PORT2 "8091"
 #define FILE_PATH "/home/semor/SEMOR/output.txt"
 
-static gnss_sol_t gps;
-static gnss_sol_t galileo;
+//Solutions
+gnss_sol_t gps;
+gnss_sol_t galileo;
+
+//Integrated solutions
+gnss_sol_t gps_imu;
+gnss_sol_t galileo_imu;
+
 FILE *file;
 FILE *p;
 int instance_no[2] = {0, 1};
-pthread_t id[2];
+pthread_t id[3];
 pid_t str2str_pid, rtkrcv1_pid, rtkrcv2_pid;
+
+char imu_data[200][75]; //Updated by Loosely.cpp
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -40,6 +46,7 @@ void close_semor(int status){
     if(rtkrcv2_pid != -1 && kill(rtkrcv2_pid, SIGKILL) == -1){
         perror("SEMOR: Error killing rtkrcv(2) process");
     }
+    close_ctocpp();
     fclose(file);
     if(p != NULL)
         fclose(p);
@@ -55,9 +62,9 @@ gnss_sol_t str2gnss(char str[MAXSTR]){
 
     gnss.time.week = atoi(strtok(copy, " "));
     gnss.time.sec = atoi(strtok(NULL, " "));
-    gnss.lat = strtod(strtok(NULL, " "), &eptr);
-    gnss.lng = strtod(strtok(NULL, " "), &eptr);
-    gnss.height = strtod(strtok(NULL, " "), &eptr);
+    gnss.x = strtod(strtok(NULL, " "), &eptr);
+    gnss.y = strtod(strtok(NULL, " "), &eptr);
+    gnss.z = strtod(strtok(NULL, " "), &eptr);
     gnss.Q = atoi(strtok(NULL, " "));
     gnss.ns = atoi(strtok(NULL, " "));
     gnss.sdn = strtod(strtok(NULL, " "), &eptr);
@@ -74,9 +81,90 @@ gnss_sol_t str2gnss(char str[MAXSTR]){
 
 void gnss2str(char* str, gnss_sol_t gnss){
     sprintf(str, "%d %d %lf %lf %lf %d %d %lf %lf %lf %lf %lf %lf %f %f", gnss.time.week,
-    gnss.time.sec, gnss.lat, gnss.lng, gnss.height, gnss.Q, gnss.ns, 
+    gnss.time.sec, gnss.x, gnss.y, gnss.z, gnss.Q, gnss.ns, 
     gnss.sdn, gnss.sde, gnss.sdu, gnss.sdne, gnss.sdeu, gnss.sdun,
     gnss.age, gnss.ratio);
+}
+
+void gnsscopy(gnss_sol_t *dest, gnss_sol_t src){
+    (*dest).time.week = src.time.week;
+    (*dest).time.sec = src.time.sec;
+    (*dest).x = src.x;
+    (*dest).y = src.y;
+    (*dest).z = src.z;
+    (*dest).Q = src.Q;
+    (*dest).ns = src.ns;
+    (*dest).sdn = src.sdn;
+    (*dest).sde = src.sde;
+    (*dest).sdu = src.sdu;
+    (*dest).sdne = src.sdne;
+    (*dest).sdeu = src.sdeu;
+    (*dest).sdun = src.sdun;
+    (*dest).age = src.age;
+    (*dest).ratio = src.ratio;
+}
+
+void process_gnss_data(char buf[MAXSTR], int ins){
+    char sol1[MAXSTR], sol2[MAXSTR];
+    gnss_sol_t intsol;
+
+    fprintf(p, "(%d) %s\n", ins, buf); //debug
+    fflush(p);
+    pthread_mutex_lock(&mutex);
+    if(ins == 0){ //Se questo handler gestisce la prima istanza di rtkrcv
+        if(gps.time.week != 0){ //La soluzione gps precedente non è stata consumata, la invio da sola prima di quella corrente
+            gnss2str(sol1, gps);
+            fprintf(file, "ALONE %s\n", sol1);
+            gps.time.week = 0;
+        }
+        gps = str2gnss(buf);
+        if(isset_first_pos == 0){
+            isset_first_pos == 1;
+            first_pos = gps;
+            init_imu(first_pos, ins);
+        }
+        if(imu_ready == 1){
+            gnsscopy(&gps_imu, gps);
+            int_sol(&gps_imu, ins);
+        }
+        if(galileo.time.week != 0 && gps.time.sec == galileo.time.sec){ //E' arrivata prima la soluzione galileo, quindi posso già farei controlli
+            //Add line with both solution side by side to the file
+            gnss2str(sol1, gps);
+            gnss2str(sol2, galileo);
+            fprintf(file, "%s ||||||||| %s\n", sol1, sol2);
+            //Dico alle prossime iterazioni che i precedenti valori sono già stati consumati
+            gps.time.week = 0;
+            galileo.time.week = 0;
+        }
+    }else{ //Se questo handler gestisce la seconda istanza di rtkrcv
+        if(galileo.time.week != 0){ //La soluzione galileo precedente non è stata consumata, la invio da sola prima di quella corrente
+            gnss2str(sol2, galileo);
+            fprintf(file, "ALONE %s\n", sol2);
+            galileo.time.week = 0;
+        }
+        galileo = str2gnss(buf);
+        gnsscopy(&galileo_imu, galileo);
+        int_sol(&galileo_imu, ins);
+        if(isset_first_pos == 0){
+            isset_first_pos == 1;
+            first_pos = galileo;
+            init_imu(first_pos, ins);
+        }
+        if(imu_ready == 1){
+            gnsscopy(&galileo_imu, galileo);
+            int_sol(&galileo_imu, ins);
+        }
+        if(gps.time.week != 0 && gps.time.sec == galileo.time.sec){ //E' arrivata prima la soluzione gps, quindi posso già farei controlli
+            //Add line with both solution side by side to the file
+            gnss2str(sol1, gps);
+            gnss2str(sol2, galileo);
+            fprintf(file, "%s ||||||||| %s\n", sol1, sol2);
+            gps.time.week = 0;
+            galileo.time.week = 0;
+        }
+    }
+    fflush(file);
+    pthread_mutex_unlock(&mutex);
 }
 
 void* handle_connection(void* inst_no){
@@ -86,7 +174,6 @@ void* handle_connection(void* inst_no){
     char buf[MAXSTR];
     int offset = 0;
     int nbytes;
-    char sol1[MAXSTR], sol2[MAXSTR];
     int socketfd;
     char port[5];
 
@@ -139,43 +226,8 @@ void* handle_connection(void* inst_no){
         if(strstr(buf, "lat") || strstr(buf, "latitude") || strlen(buf) < 5){ //Se la linea letta contiene fa parte dell'header
             continue;
         }
-        fprintf(p, "(%d) %s\n", ins, buf);
-        fflush(p);
-        pthread_mutex_lock(&mutex);
-        if(ins == 0){
-            if(gps.time.week != 0){ //La soluzione gps precedente non è stata consumata, la invio da sola prima di quella corrente
-                gnss2str(sol1, gps);
-                fprintf(file, "ALONE %s\n", sol1);
-                gps.time.week = 0;
-            }
-            gps = str2gnss(buf);
-            if(galileo.time.week != 0 && gps.time.sec == galileo.time.sec){ //E' arrivata prima la soluzione galileo
-                //Add line with both solution side by side to the file
-                gnss2str(sol1, gps);
-                gnss2str(sol2, galileo);
-                fprintf(file, "%s ||||||||| %s\n", sol1, sol2);
-                //Dico alle prossime iterazioni che i precedenti valori sono già stati consumati
-                gps.time.week = 0;
-                galileo.time.week = 0;
-            }
-        }else{
-            if(galileo.time.week != 0){ //La soluzione galileo precedente non è stata consumata, la invio da sola prima di quella corrente
-                gnss2str(sol2, galileo);
-                fprintf(file, "ALONE %s\n", sol2);
-                galileo.time.week = 0;
-            }
-            galileo = str2gnss(buf);
-            if(gps.time.week != 0 && gps.time.sec == galileo.time.sec){ //E' arrivata prima la soluzione gps
-                //Add line with both solution side by side to the file
-                gnss2str(sol1, gps);
-                gnss2str(sol2, galileo);
-                fprintf(file, "%s ||||||||| %s\n", sol1, sol2);
-                gps.time.week = 0;
-                galileo.time.week = 0;
-            }
-        }
-        fflush(file);
-        pthread_mutex_unlock(&mutex);
+
+        process_gnss_data(buf, ins);
     }
 
 
@@ -191,6 +243,7 @@ void start_processing(void){
         perror("SEMOR fopen()");
     }
     fflush(file);
+
     //Ho bisogno di avviare gli handler in thread separati in caso una delle due istanze di rtkrcv non sia up in un determinato momento
     //Avvio handler per rtkrcv1
     ret = pthread_create(&id[0], NULL, handle_connection, (void *)&instance_no[0]);
@@ -204,6 +257,14 @@ void start_processing(void){
     if(ret != 0){
         errno = ret;
         perror("SEMOR: thread create 1");
+        close_semor(1);
+    }
+
+    //IMU
+    ret = pthread_create(&id[2], NULL, imu, NULL);
+    if(ret != 0){
+        errno = ret;
+        perror("SEMOR: thread create 2");
         close_semor(1);
     }
 }

@@ -17,6 +17,7 @@ class InitializeIMU
 {
 public:
 	// CONSTRUCTOR
+	InitializeIMU(double iniTimeEnd, std::vector<double> LLH);
 	InitializeIMU(std::ifstream& fin_imu, double iniTimeEnd, std::vector<double> LLH);
 	// DESTRUCTOR
 	~InitializeIMU();

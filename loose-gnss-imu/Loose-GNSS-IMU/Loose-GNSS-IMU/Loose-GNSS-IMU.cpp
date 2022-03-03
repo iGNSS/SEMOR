@@ -7,48 +7,15 @@
 
 using namespace std;
 
-// The program starts and ends inside main.
-int main()
-{
-	clock_t start; start = clock();
 
+void init_imu(gnss_sol_t fst_pos)
+{
 	// *** Input/Output file path
-	string filePathGNSS = "Input/GNSS.txt";
-	string filePathIMU = "Input/IMU.txt";
-	string filePathOUT = "Output/LOOSE-GNSS-IMU.txt";
+	string filePathGNSS = "/home/semor/SEMOR/loose-gnss-imu/Loose-GNSS-IMU/Loose-GNSS-IMU/Input/GNSS.txt";
+	string filePathIMU = "/home/semor/SEMOR/loose-gnss-imu/Loose-GNSS-IMU/Loose-GNSS-IMU/Input/IMU.txt";
+	string filePathOUT = "/home/semor/SEMOR/loose-gnss-imu/Loose-GNSS-IMU/Loose-GNSS-IMU/Output/LOOSE-GNSS-IMU.txt";
 
 	// *** Loosely-coupled integration of GNSS-IMU
-	Loosely(filePathGNSS, filePathIMU, filePathOUT);
+	Loosely(fst_pos);
 
-	// *** Time elapsed
-	double	duration = (double)((clock() - start) / CLOCKS_PER_SEC);
-	cout << "TIME TAKEN : " << duration << endl;
-	/*
-	* 
-	//DEBUG
-
-	string in = "Output/input.txt";
-	string out = "Output/output.txt";
-
-	ifstream fin;
-	ofstream fout;
-
-	fin.open(in);
-	fout.open(out);
-
-	string line;
-	while (!fin.eof()) {
-		getline(fin, line);
-		cout << line << endl;
-	}
-
-	while (!fin.eof()) {
-		getline(fin, line);
-		cout << line << endl;
-	}
-
-	*/
-
-	return 0;
 }
-

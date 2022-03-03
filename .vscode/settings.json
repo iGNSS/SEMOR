@@ -6,6 +6,8 @@
         "pthread.h": "c",
         "type_traits": "c",
         "stdio.h": "c",
-        "fcntl.h": "c"
-    }
+        "fcntl.h": "c",
+        "semor.h": "c"
+    },
+    "C_Cpp.errorSquiggles": "Enabled"
 }
