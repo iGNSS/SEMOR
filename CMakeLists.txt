@@ -7,7 +7,7 @@ set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
 
 # add every executable in a folder
 file(GLOB LGI_FILES ./loose-gnss-imu/Loose-GNSS-IMU/Loose-GNSS-IMU/*.cpp) # Loose-GNSS-IMU files
-add_executable(semor semor.c src/client.c ${LGI_FILES})
+add_executable(semor semor.c src/client.c src/ctocpp.cpp ${LGI_FILES})
 
 
 # add include dir

@@ -16,8 +16,8 @@
 
 #define FILE_PATH "../output.txt"
 
-#define GPS_FILE "../test/gps.txt"
-#define GALILEO_FILE "../test/galileo.txt"
+#define GPS_FILE "test/gps.pos"
+#define GALILEO_FILE "test/galileo.pos"
 
 //Solutions
 gnss_sol_t gps;
@@ -32,6 +32,10 @@ FILE *p;
 int instance_no[2] = {0, 1};
 pthread_t id[3];
 pid_t str2str_pid, rtkrcv1_pid, rtkrcv2_pid;
+
+int isset_first_pos;
+int imu_ready;
+gnss_sol_t first_pos;
 
 char imu_data[200][75]; //Updated by Loosely.cpp
 
@@ -153,7 +157,7 @@ void process_gnss_data(char buf[MAXSTR], int ins){
         }
         galileo = str2gnss(buf);
         gnsscopy(&galileo_imu, galileo);
-        if(isset_first_pos == 0){
+        if(isset_first_pos == 0){ //forse meglio di no
             isset_first_pos == 1;
             first_pos = galileo;
             init_imu(first_pos);
@@ -195,14 +199,13 @@ void* handle_connection(void* inst_no){
     }
     //Inizializzazione socket
     //##CHANGED##
-    free(res);
 
     while(1){
         offset = 0;
         do{
             nbytes = read(socketfd, buf+offset, 1);
             if(nbytes == -1){
-                perror("SEMOR read socket1");
+                perror("SEMOR read socket");
                 close_semor(1);
             }else if(nbytes == 0){ // Rtkrcv1 is down
                 printf("rtkrcv down\n"); //debug

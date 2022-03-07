@@ -1,4 +1,5 @@
 #include "semor.h"
+#include "Loosely.h"
 //##CHANGED##
 Loosely *imu;
 

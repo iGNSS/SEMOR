@@ -301,7 +301,7 @@ Loosely::Loosely(gnss_sol_t fst_pos){
 }
 
 
-Loosely::Loosely(std::string filePathGNSS, std::string filePathIMU, std::string filePathOUT) {
+/*Loosely::Loosely(std::string filePathGNSS, std::string filePathIMU, std::string filePathOUT) {
 	if (isValid(filePathGNSS) && isValid(filePathIMU)) {
 		
 		// Input File Streams
@@ -395,3 +395,4 @@ Loosely::Loosely(std::string filePathGNSS, std::string filePathIMU, std::string 
 		fin_imu.close(); fin_gnss.close();
 	}
 }
+*/

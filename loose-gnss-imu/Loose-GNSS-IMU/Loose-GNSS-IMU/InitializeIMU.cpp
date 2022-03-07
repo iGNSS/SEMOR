@@ -106,6 +106,10 @@ int InitializeIMU::stepInitializeIMU(ReaderIMU OBSimu, double EndTime, vector<do
 	_RPY.push_back(_roll); _RPY.push_back(_pitch); _RPY.push_back(_yaw);
 	return 1;
 }
+
+InitializeIMU::InitializeIMU(){
+
+}
 	
 // Constructor : Static Initialization of IMU Attitude
 /*InitializeIMU::InitializeIMU(ifstream& fin_imu, double EndTime, vector<double> LLH) {

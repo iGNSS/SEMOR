@@ -3,9 +3,11 @@
 
 #include <unistd.h>
 
+/*
 #ifdef __cplusplus
 #include "Loosely.h"
 #endif
+*/
 
 #define MAXSTR 256
 #define IMU_PORT "8100"
@@ -57,7 +59,7 @@ extern void close_semor(int);
 
 
 #ifdef __cplusplus
-extern Loosely *imu; //##CHANGED##
+//extern Loosely *imu; //##CHANGED##
 extern "C"{
 #endif
 void init_imu(gnss_sol_t fst_pos);
