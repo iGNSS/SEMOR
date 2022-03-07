@@ -35,6 +35,7 @@ public:
 	// Functions
 	void clearObs();
 	void obsEpoch(std::ifstream& infile);
+	void obsEpoch(std::string& line);
 
 private:
 

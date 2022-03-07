@@ -16,9 +16,9 @@ int main(){
     int isset_first_pos;
     int imu_ready;
 
-    char *const str2str_args[] = {"/home/semor/SEMOR/RTKLIB-b34e/app/consapp/str2str/gcc/str2str", "-in", "tcpcli://192.168.2.91:8081", "-out", "tcpsvr://:8085", "-out", "tcpsvr://:8086", NULL};
-    char *const rtkrcv1_args[] = {"/home/semor/SEMOR/RTKLIB-b34e/app/consapp/rtkrcv/gcc/rtkrcv", "-s", "-o", "/home/semor/SEMOR/conf/rtk4pid.conf", NULL}; //rtk4pid.conf
-    char *const rtkrcv2_args[] = {"/home/semor/SEMOR/RTKLIB-b34e/app/consapp/rtkrcv/gcc/rtkrcv", "-s", "-o", "/home/semor/SEMOR/conf/ppp4pid_navcast.conf", NULL}; //ppp4pid_navcast.conf
+    //char *const str2str_args[] = {"/home/semor/SEMOR/RTKLIB-b34e/app/consapp/str2str/gcc/str2str", "-in", "tcpcli://192.168.2.91:8081", "-out", "tcpsvr://:8085", "-out", "tcpsvr://:8086", NULL};
+    //char *const rtkrcv1_args[] = {"/home/semor/SEMOR/RTKLIB-b34e/app/consapp/rtkrcv/gcc/rtkrcv", "-s", "-o", "/home/semor/SEMOR/conf/rtk4pid.conf", NULL}; //rtk4pid.conf
+    //char *const rtkrcv2_args[] = {"/home/semor/SEMOR/RTKLIB-b34e/app/consapp/rtkrcv/gcc/rtkrcv", "-s", "-o", "/home/semor/SEMOR/conf/ppp4pid_navcast.conf", NULL}; //ppp4pid_navcast.conf
 
     //Execute str2str
     //Initialize shared variables
@@ -26,7 +26,7 @@ int main(){
     isset_first_pos = 0;
     imu_ready = 0;
     
-    if ((str2str_pid = fork()) == -1){
+    /*if ((str2str_pid = fork()) == -1){
         perror("SEMOR: fork error: str2str");
         close_semor(1);
     }
@@ -75,7 +75,7 @@ int main(){
     //Create pids.txt file to manually kill previous executed processes if needed
     FILE *pids = fopen("/home/semor/SEMOR/pids.txt", "w");
     fprintf(pids, "str2str: %d\nrtkrcv(1): %d\nrtkrcv(2): %d", str2str_pid, rtkrcv1_pid, rtkrcv2_pid);
-    fclose(pids);
+    fclose(pids);*/
 
     /*
     Semor starts here

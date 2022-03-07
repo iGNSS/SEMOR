@@ -23,21 +23,24 @@ typedef struct tow{ /* Time Of Week */
     int sec;
 }tow_t;
 
-typedef struct gnss_solution{
+typedef struct gnss_solution{ /* a = x | n ,    b = y | e ,     c = z | u*/
     tow_t time;
-    double x;
-    double y;
-    double z;
+    double a;
+    double b;
+    double c;
     short Q;
     short ns;
-    double sdn;
-    double sde;
-    double sdu;
-    double sdne;
-    double sdeu;
-    double sdun;
+    double sda;
+    double sdb;
+    double sdc;
+    double sdab;
+    double sdbc;
+    double sdca;
     float age;
     float ratio;
+    double va;
+    double vb;
+    double vc;
 
     //int compared; //If it has no matches for its epoch, it will be printed alone with no comparisons
 } gnss_sol_t;
@@ -54,12 +57,11 @@ extern void close_semor(int);
 
 
 #ifdef __cplusplus
-extern Loosely *looseGps;
-extern Loosely *looseGalileo;
+extern Loosely *imu; //##CHANGED##
 extern "C"{
 #endif
-void init_imu(gnss_sol_t fst_pos, int type);
-void int_sol(gnss_sol_t *cur_gnss, int type); /* Called for each GNSS epoch*/
+void init_imu(gnss_sol_t fst_pos);
+void imu_sol(gnss_sol_t* cur_gnss); /* Called for each GNSS epoch*/
 void close_ctocpp(void); //Delete loosely
 #ifdef __cplusplus
 }

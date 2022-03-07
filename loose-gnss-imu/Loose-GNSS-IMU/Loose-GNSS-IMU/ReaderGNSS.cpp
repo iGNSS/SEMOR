@@ -17,7 +17,6 @@ ReaderGNSS::~ReaderGNSS() {}
 // To clear contents in observation data structure
 void ReaderGNSS::clearObs() {
 	_GNSSdata.Pxyz.setZero(); _GNSSdata.Vxyz.setZero();
-	_GNSSdata.CovPxyz.setZero(); _GNSSdata.CovVxyz.setZero();
 	_GNSSdata.gpsTime = NULL;
 }
 
@@ -30,6 +29,42 @@ void ReaderGNSS::readHeader(ifstream& infile) {
 }
 
 // This function extracts and stores epochwise observations from file
+void ReaderGNSS::readEpoch(string& line) {
+	// Initializing Variables
+	double epochTime = 0;
+
+	_GNSSdata.Pxyz = VectorXd::Zero(3);
+	_GNSSdata.Vxyz = VectorXd::Zero(3);
+
+	if (!line.empty()) {
+		// Split words in the line
+		istringstream iss(line);
+		vector<string> words{ istream_iterator<string>{iss}, istream_iterator<string>{} };
+		
+		// *** Organize GNSS Data structure
+		// Extract observation time
+		_GNSSdata.gpsTime = stod(words[1]);
+		// Organizing GNSS Solution
+		_GNSSdata.Pxyz(0) = stod(words[2]); _GNSSdata.Pxyz(1) = stod(words[3]); _GNSSdata.Pxyz(2) = stod(words[4]);
+		_GNSSdata.Vxyz(0) = stod(words[15]); _GNSSdata.Vxyz(1) = stod(words[16]); _GNSSdata.Vxyz(2) = stod(words[17]);
+	}
+}
+
+void ReaderGNSS::readEpoch(gnss_sol_t& gnss) {
+	// Initializing Variables
+	double epochTime = 0;
+
+	_GNSSdata.Pxyz = VectorXd::Zero(3);
+	_GNSSdata.Vxyz = VectorXd::Zero(3);
+	
+	// *** Organize GNSS Data structure
+	// Extract observation time
+	_GNSSdata.gpsTime = gnss.time.sec;
+	// Organizing GNSS Solution
+	_GNSSdata.Pxyz(0) = gnss.a; _GNSSdata.Pxyz(1) = gnss.b; _GNSSdata.Pxyz(2) = gnss.c;
+	_GNSSdata.Vxyz(0) = gnss.va; _GNSSdata.Vxyz(1) = gnss.vb; _GNSSdata.Vxyz(2) = gnss.vc;
+}
+
 void ReaderGNSS::readEpoch(ifstream& infile) {
 	// Initializing Variables
 	double epochTime = 0;

@@ -14,6 +14,10 @@ using namespace Eigen;
 const double Om = 7.2921155e-5;
 const double PI = 3.1415926536;
 
+double Ax_avg = 0; double Ay_avg = 0; double Az_avg = 0;
+double Gx_avg = 0; double Gy_avg = 0; double Gz_avg = 0;
+int c = 0; //count
+
 // Gravitational acceleration ECEF components
 VectorXd gravityECEF(double lat, double height, MatrixXd Cne) {
 	double WIE_E = 7292115e-11;
@@ -37,16 +41,87 @@ VectorXd gravityECEF(double lat, double height, MatrixXd Cne) {
 	grav(2) = Cne(2, 2) * g;
 	return grav;
 }
+
+int InitializeIMU::stepInitializeIMU(ReaderIMU OBSimu, double EndTime, vector<double> LLH) {
+	// Iterate through IMU file
+	if (OBSimu._IMUdata.imuTime < EndTime) {
+		c++;
+		// Computing running sum
+		Ax_avg = Ax_avg + OBSimu._IMUdata.Ax;
+		Ay_avg = Ay_avg + OBSimu._IMUdata.Ay;
+		Az_avg = Az_avg + OBSimu._IMUdata.Az;
+		Gx_avg = Gx_avg + OBSimu._IMUdata.Gx;
+		Gy_avg = Gy_avg + OBSimu._IMUdata.Gy;
+		Gz_avg = Gz_avg + OBSimu._IMUdata.Gz;
+		return 0;
+	}
+	// Compute rough estimate of Yaw
+	double numer = -Gx_avg / c; double denom = Gy_avg / c;
+	double yaw = atan(numer / denom);
+	// Gravity components ECEF
+	MatrixXd Cbe(3, 3); Cbe.setZero(); Cbe = b2eDCM(LLH.at(0), LLH.at(1), 0, 0, yaw);
+	MatrixXd Cne(3, 3); Cne.setZero(); Cne = llf2ecefDCM(LLH.at(0), LLH.at(1));
+	VectorXd grav(3); grav.setZero(); grav = gravityECEF(LLH.at(0), LLH.at(2), Cne);
+	// Compute Accelerometer Bias
+	VectorXd fbib(3); fbib.setZero();
+	fbib(0) = Ax_avg / c; fbib(1) = Ay_avg / c; fbib(2) = Az_avg / c;
+	VectorXd feib(3); feib.setZero(); feib = Cbe * fbib;
+	VectorXd fbias_e(3); fbias_e.setZero(); fbias_e = feib + grav;
+	VectorXd fbias_b(3); fbias_b.setZero(); fbias_b = Cbe.transpose() * fbias_e;
+	_ACCbias = eigVector2std(fbias_b);
+	// Compute Gyroscope Bias
+	MatrixXd Cbn(3, 3); Cbn.setZero(); Cbn = b2llfDCM(0, 0, yaw);
+	VectorXd Om_b_ib(3); Om_b_ib.setZero(); Om_b_ib(0) = Gx_avg / c; Om_b_ib(1) = Gy_avg / c; Om_b_ib(2) = Gz_avg / c;
+	VectorXd Om_b_nb(3); Om_b_nb.setZero(); Om_b_nb = std2eigVector(Transformer(eigVector2std(Om_b_ib), Cbn));
+	VectorXd Om_n_ie(3); Om_n_ie.setZero(); Om_n_ie(1) = Om * cos(LLH.at(0)); Om_n_ie(2) = Om * sin(LLH.at(0));
+	VectorXd gbias_n(3); gbias_n.setZero(); gbias_n = Om_b_nb - Om_n_ie;
+	VectorXd gbias_b(3); gbias_b.setZero(); gbias_b = std2eigVector(Transformer(eigVector2std(gbias_n), Cbn.transpose()));
+	_GYRbias = eigVector2std(gbias_b);
+
+	// Computing Average
+	Ax_avg = (Ax_avg / c) - fbias_b(0);
+	Ay_avg = (Ay_avg / c) - fbias_b(1);
+	Az_avg = (Az_avg / c) - fbias_b(2);
+	Gx_avg = (Gx_avg / c) - gbias_b(0);
+	Gy_avg = (Gy_avg / c) - gbias_b(1);
+	Gz_avg = (Gz_avg / c) - gbias_b(2);
+
+	// Add average imu measurements to vector
+	_GYRavg.push_back(Gx_avg); _GYRavg.push_back(Gy_avg); _GYRavg.push_back(Gz_avg);
+	_ACCavg.push_back(Ax_avg); _ACCavg.push_back(Ay_avg); _ACCavg.push_back(Az_avg);
+
+	// Rotate measurements
+	Gx_avg = _GYRavg.at(0); Gy_avg = _GYRavg.at(1); Gz_avg = _GYRavg.at(2);
+	Ax_avg = _ACCavg.at(0); Ay_avg = _ACCavg.at(1); Az_avg = _ACCavg.at(2);
+
+	// *** As per Paul Groves' Textbook
+	// Compute Roll and Pitch
+	_roll = atan2(-Ay_avg, Az_avg);
+	_pitch = atan(-Ax_avg / (sqrt(pow(Ay_avg, 2) + pow(Az_avg, 2))));
+	// Compute Yaw
+	double num = -Gy_avg * cos(_roll) + Gz_avg * sin(_roll);
+	double den = Gx_avg * cos(_pitch) + Gy_avg * sin(_pitch) * sin(_roll) + Gz_avg * cos(_roll) * sin(_pitch);
+	_yaw = atan2(num, den);
+	// Add roll pitch yaw to vector
+	_RPY.push_back(_roll); _RPY.push_back(_pitch); _RPY.push_back(_yaw);
+	return 1;
+}
 	
 // Constructor : Static Initialization of IMU Attitude
-InitializeIMU::InitializeIMU(double EndTime, vector<double> LLH) {
+/*InitializeIMU::InitializeIMU(ifstream& fin_imu, double EndTime, vector<double> LLH) {
+	string line;
+	getline(fin_imu, line);
+	if (line.find("GPS") != std::string::npos) {
+		getline(fin_imu, line);
+	}
 	ReaderIMU OBSimu; OBSimu.obsEpoch(fin_imu); //Leggere misurazione IMU
+
 	// Running average variables
 	double Ax_avg = 0; double Ay_avg = 0; double Az_avg = 0;
 	double Gx_avg = 0; double Gy_avg = 0; double Gz_avg = 0;
 	int count = 0;
 	// Iterate through IMU file
-	while (!(OBSimu._IMUdata.imuTime < EndTime)) {
+	while (OBSimu._IMUdata.imuTime < EndTime) {
 		count++;
 		// Reading IMU Epoch
 		OBSimu.clearObs();
@@ -108,9 +183,9 @@ InitializeIMU::InitializeIMU(double EndTime, vector<double> LLH) {
 	_yaw = atan2(num, den);
 	// Add roll pitch yaw to vector
 	_RPY.push_back(_roll); _RPY.push_back(_pitch); _RPY.push_back(_yaw);
-}
+}*/
 
-InitializeIMU::InitializeIMU(ifstream& fin_imu, double EndTime, vector<double> LLH) {
+/*InitializeIMU::InitializeIMU(ifstream& fin_imu, double EndTime, vector<double> LLH) {
 	ReaderIMU OBSimu; OBSimu.obsEpoch(fin_imu);
 	// Running average variables
 	double Ax_avg = 0; double Ay_avg = 0; double Az_avg = 0;
@@ -180,7 +255,7 @@ InitializeIMU::InitializeIMU(ifstream& fin_imu, double EndTime, vector<double> L
 	// Add roll pitch yaw to vector
 	_RPY.push_back(_roll); _RPY.push_back(_pitch); _RPY.push_back(_yaw);
 }
-
+*/
 // Destructor
 InitializeIMU::~InitializeIMU() {
 	_GYRavg.clear(); _ACCavg.clear(); _RPY.clear(); _GYRbias.clear(); _ACCbias.clear();

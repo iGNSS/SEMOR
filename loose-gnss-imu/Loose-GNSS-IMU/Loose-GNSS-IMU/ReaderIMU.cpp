@@ -22,6 +22,31 @@ void ReaderIMU::clearObs() {
 }
 
 // This function extracts and stores epochwise observations from file
+void ReaderIMU::obsEpoch(string& line) {
+	// Initializing Variables
+	double epochTime = 0;
+	vector<double> acc;
+	vector<double> gyr;
+	// Read first line
+	if (!line.empty()) {
+		// Split words in the line
+		istringstream iss(line);
+		vector<string> words{ istream_iterator<string>{iss}, istream_iterator<string>{} };
+		// Extract observation time
+		epochTime = stod(words[1]);
+		// Organizing Acceleration Observations
+		acc.push_back(stod(words[5])); acc.push_back(stod(words[6])); acc.push_back(stod(words[7]));
+		// Organizing Gyroscope Observations
+		gyr.push_back(stod(words[2])); gyr.push_back(stod(words[3])); gyr.push_back(stod(words[4]));
+	}
+	// Organize IMU Data structure
+	_IMUdata.imuTime = epochTime;
+	_IMUdata.Acc = acc;
+	_IMUdata.Gyr = gyr;
+	_IMUdata.Ax = acc[0]; _IMUdata.Ay = acc[1]; _IMUdata.Az = acc[2];
+	_IMUdata.Gx = gyr[0]; _IMUdata.Gy = gyr[1]; _IMUdata.Gz = gyr[2];
+}
+
 void ReaderIMU::obsEpoch(ifstream& infile) {
 	// Initializing Variables
 	double epochTime = 0;

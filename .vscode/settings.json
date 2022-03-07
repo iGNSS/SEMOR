@@ -7,7 +7,12 @@
         "type_traits": "c",
         "stdio.h": "c",
         "fcntl.h": "c",
-        "semor.h": "c"
+        "semor.h": "c",
+        "iosfwd": "cpp",
+        "xstring": "cpp",
+        "vector": "cpp",
+        "iterator": "cpp",
+        "cmath": "cpp"
     },
     "C_Cpp.errorSquiggles": "Enabled"
 }

@@ -8,7 +8,7 @@
 using namespace std;
 
 
-void init_imu(gnss_sol_t fst_pos)
+/*void init_imu(gnss_sol_t fst_pos)
 {
 	// *** Input/Output file path
 	string filePathGNSS = "/home/semor/SEMOR/loose-gnss-imu/Loose-GNSS-IMU/Loose-GNSS-IMU/Input/GNSS.txt";
@@ -18,4 +18,4 @@ void init_imu(gnss_sol_t fst_pos)
 	// *** Loosely-coupled integration of GNSS-IMU
 	Loosely(fst_pos);
 
-}
+}*/

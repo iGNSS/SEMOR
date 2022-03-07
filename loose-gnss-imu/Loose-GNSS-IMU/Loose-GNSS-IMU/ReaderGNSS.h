@@ -7,6 +7,7 @@
 */
 
 #include "pch.h"
+#include "semor.h"
 
 class ReaderGNSS
 {
@@ -31,6 +32,8 @@ public:
 	// Functions
 	void clearObs();
 	void readEpoch(std::ifstream& infile);
+	void readEpoch(std::string& line);
+	void readEpoch(gnss_sol_t& gnss);
 	void readHeader(std::ifstream& infile);
 
 };

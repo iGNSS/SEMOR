@@ -17,7 +17,7 @@ class InitializeIMU
 {
 public:
 	// CONSTRUCTOR
-	InitializeIMU(double iniTimeEnd, std::vector<double> LLH);
+	//InitializeIMU(double iniTimeEnd, std::vector<double> LLH);
 	InitializeIMU(std::ifstream& fin_imu, double iniTimeEnd, std::vector<double> LLH);
 	// DESTRUCTOR
 	~InitializeIMU();
@@ -31,6 +31,8 @@ public:
 	std::vector<double> _ACCavg;
 	std::vector<double> _GYRbias;
 	std::vector<double> _ACCbias;
+	
+	int stepInitializeIMU(ReaderIMU OBSimu, double EndTime, vector<double> LLH); //returns 1 if imu has been initialized, 0 otherwise
 
 private:
 	// Functions

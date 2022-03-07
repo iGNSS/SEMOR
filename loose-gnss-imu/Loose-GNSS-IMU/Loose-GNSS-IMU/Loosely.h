@@ -26,9 +26,12 @@ public:
 	Loosely(gnss_sol_t fst_pos);
 	Loosely(std::string filePathGNSS, std::string filePathIMU, std::string filePathOUT);
 
+	//##CHANGED##
 	void init_imu(gnss_sol_t fst_pos);
-	void get_int_sol(gnss_sol_t *int_sol); //In client.c fare una copia del dato gnss, quella copia è la struttura in cui sarà immagazzinato int_sol
+	void get_imu_sol(gnss_sol_t* int_sol); //In client.c fare una copia del dato gnss, quella copia è la struttura in cui sarà immagazzinato int_sol
 
+	ifstream fin_gnss;
+	//##CHANGED##
 	struct GNSSpos {
 		double epoch;
 		std::vector<double> posXYZ;
