@@ -259,13 +259,5 @@ void start_processing(void){
         perror("SEMOR: thread create 1");
         close_semor(1);
     }
-
-    //IMU
-    ret = pthread_create(&id[2], NULL, imu, NULL);
-    if(ret != 0){
-        errno = ret;
-        perror("SEMOR: thread create 2");
-        close_semor(1);
-    }
 }
 
