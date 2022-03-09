@@ -138,15 +138,17 @@ void process_gnss_data(char buf[MAXSTR], int ins){
             first_pos = gps;
             init_imu(first_pos);
         }
+        if(galileo_imu.time.sec != gps.time.sec){ //prendo soluzione imu se non è già stata presa da galileo
             gnsscopy(&gps_imu, gps);
             gps_imu.time.week = -1;
             imu_sol(&gps_imu);
+        }
         if(galileo.time.week != 0 && gps.time.sec == galileo.time.sec){ //E' arrivata prima la soluzione galileo, quindi posso già farei controlli
             //Add line with both solution side by side to the file
             gnss2str(sol1, gps);
             gnss2str(sol2, galileo);
-            gnss2str(sol3, gps_imu);
-            fprintf(file, "%s ||| %s ||| %s\n", sol1, sol2, (gps_imu.time.week == -1) ? "IMU initializing" : sol3);
+            gnss2str(sol3, gps_imu.time.week == 0 ? gps_imu : galileo_imu);
+            fprintf(file, "%s ||| %s ||| %s\n", sol1, sol2, (gps_imu.time.week & galileo_imu.time.week != 0) ? "IMU initializing" : sol3);
             //Dico alle prossime iterazioni che i precedenti valori sono già stati consumati
             gps.time.week = 0;
             galileo.time.week = 0;
@@ -164,15 +166,17 @@ void process_gnss_data(char buf[MAXSTR], int ins){
             first_pos = galileo;
             init_imu(first_pos);
         }
+        if(gps_imu.time.sec != galileo.time.sec){ //prendo soluzione imu se non è già stata presa da gps
             gnsscopy(&galileo_imu, galileo);
             galileo_imu.time.week = -1;
             imu_sol(&galileo_imu);
+        }
         if(gps.time.week != 0 && gps.time.sec == galileo.time.sec){ //E' arrivata prima la soluzione gps, quindi posso già farei controlli
             //Add line with both solution side by side to the file
             gnss2str(sol1, gps);
             gnss2str(sol2, galileo);
-            gnss2str(sol3, galileo_imu);
-            fprintf(file, "%s ||| %s ||| %s\n", sol1, sol2, (galileo_imu.time.week == -1) ? "IMU initializing" : sol3);
+            gnss2str(sol3, gps_imu.time.week == 0 ? gps_imu : galileo_imu);
+            fprintf(file, "%s ||| %s ||| %s\n", sol1, sol2, (gps_imu.time.week & galileo_imu.time.week != 0) ? "IMU initializing" : sol3);
             gps.time.week = 0;
             galileo.time.week = 0;
         }
@@ -192,6 +196,10 @@ void* handle_connection(void* inst_no){
     int socketfd; //not socket but file for testing ##CHANGED##
     char port[5];
     //##CHANGED##
+
+    //Inizializzo soluzioni imu
+    gps_imu.time.week = -1;
+    galileo_imu.time.week = -1;
     //Inizializzazione socket
 
     if(ins == 0){
@@ -223,7 +231,7 @@ void* handle_connection(void* inst_no){
         }
         process_gnss_data(buf, ins);
         //Simulo 1Hz
-        sleep(1);
+        //sleep(1);
     }
 
 

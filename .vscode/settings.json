@@ -12,7 +12,9 @@
         "xstring": "cpp",
         "vector": "cpp",
         "iterator": "cpp",
-        "cmath": "cpp"
+        "cmath": "cpp",
+        "ostream": "cpp",
+        "iostream": "cpp"
     },
     "C_Cpp.errorSquiggles": "Enabled"
 }

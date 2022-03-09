@@ -45,6 +45,13 @@ public:
 	Eigen::MatrixXd _Ne;
 	Eigen::MatrixXd _Fe;
 	Eigen::VectorXd _Lxyz;; // IMU to GPS lever arm in the body frame
+	//Variance
+	Eigen::VectorXd _x;
+	Eigen::MatrixXd _P;
+	Eigen::MatrixXd _v;
+	Eigen::MatrixXd _R;
+	Eigen::MatrixXd _H;
+	Eigen::MatrixXd _T;
 
 
 private:

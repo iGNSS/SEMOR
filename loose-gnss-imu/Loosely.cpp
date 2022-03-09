@@ -170,51 +170,63 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 	if(imu_ready == 0){
 		while(OBSimu._IMUdata.imuTime < (*int_sol).time.sec){ //read whole imu date of a particular gnss epoch
 			if(imu_ready == 0 && iniIMU.stepInitializeIMU(OBSimu, IMU_INI_TIME_END, _LLH_o) == 1){
+				_dT = 1.0;
 				// Initialize IMU Mechanization
 				MechECEF.InitializeMechECEF(_ECEF_imu, _LLH_o, GNSSsol.velXYZ, iniIMU._RPY, iniIMU._ACCbias, iniIMU._GYRbias);
-				read_imu();
+				/*read_imu();
 				_epochIMU = OBSimu._IMUdata.imuTime;
-				IMUsol.posXYZ = _ECEF_imu;
+				IMUsol.posXYZ = _ECEF_imu;*/
 
 				imu_ready = 1; //Tells client.c that it can read imu data
 			}
 			read_imu();
+			if(imu_ready){
+				_epochIMU = OBSimu._IMUdata.imuTime;
+				IMUsol.posXYZ = _ECEF_imu;
+			}
 		}
 		return;
 	}
 	//If imu is ready:
+	/*_ECEF_o = eigVector2std(double2eigVector((*int_sol).a, (*int_sol).b, (*int_sol).c));
+	_LLH_o = ecef2geo(_ECEF_o);	*/
 	do {
+		read_imu();
+		//printf("%lf\n", _epochIMU);
 		// Process IMU
 		SolutionIMU(OBSimu, MechECEF);				//This has effects on: MechECEF e IMUsol
-
-		read_imu();
+		/*_ECEF_o = eigVector2std(double2eigVector(IMUsol.posXYZ.at(0), IMUsol.posXYZ.at(1), IMUsol.posXYZ.at(2)));
+		_LLH_o = ecef2geo(_ECEF_o);	*/
 
 		//Update Time
 		_epochIMU = OBSimu._IMUdata.imuTime;
 	} while (_epochIMU <= (*int_sol).time.sec); //_epochIMU <= _epochGNSS
 
+	//cout << "-------------------" << endl;
 	// *** Inegrated Solution (Loosely Coupled)	
-	LooseCoupling(OBSgnss, MechECEF);				//This has effects on: MechECEF, on OBSgnss e on INTsol, it utilize (reads data from) GNSSsol
+	//LooseCoupling(OBSgnss, MechECEF);				//This has effects on: MechECEF, on OBSgnss e on INTsol, it utilize (reads data from) GNSSsol
 
 	// *** Read GPS 1Hz
 	OBSgnss.clearObs();
 	OBSgnss.readEpoch(*int_sol); //Set gnss position to generate next position with imu (in the next function call)
 	_epochGNSS = OBSgnss._GNSSdata.gpsTime;
 	// Process Epoch
-	SolutionGNSS(OBSgnss);	
+	//SolutionGNSS(OBSgnss);	
 
 	//Reinitialize ecef mechanization to have the new gnss location as the initial position
-	//printf("\n%lf %lf %lf\n", (*int_sol).a, (*int_sol).b, (*int_sol).c);
-	/*_ECEF_o = eigVector2std(double2eigVector((*int_sol).a, (*int_sol).b, (*int_sol).c));
+
+	_ECEF_o = eigVector2std(double2eigVector((*int_sol).a, (*int_sol).b, (*int_sol).c));
 	_LLH_o = ecef2geo(_ECEF_o);	
-	_ECEF_imu = _ECEF_o; GNSSsol.posXYZ = _ECEF_o;
-	GNSSsol.velXYZ = eigVector2std(double2eigVector((*int_sol).va, (*int_sol).vb, (*int_sol).vc));*/
+
+	//_ECEF_imu = _ECEF_o; GNSSsol.posXYZ = _ECEF_o;
+	//GNSSsol.velXYZ = eigVector2std(double2eigVector((*int_sol).va, (*int_sol).vb, (*int_sol).vc));
 	//MechECEF.InitializeMechECEF(_ECEF_imu, _LLH_o, GNSSsol.velXYZ, iniIMU._RPY, iniIMU._ACCbias, iniIMU._GYRbias);
 
 	//Return imu solution
 	(*int_sol).a = IMUsol.posXYZ.at(0);
 	(*int_sol).b = IMUsol.posXYZ.at(1);
 	(*int_sol).c = IMUsol.posXYZ.at(2);
+	//printf("%d %lf %lf %lf\n", (*int_sol).time.sec, (*int_sol).a, (*int_sol).b, (*int_sol).c);
 
 	(*int_sol).time.week = 0;
 }
@@ -222,7 +234,7 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 void Loosely::init_imu(gnss_sol_t fst_pos){
 	//fimu.open("tokyo_imu.csv");
 	FileIO FIO;
-	FIO.fileSafeIn("loose-gnss-imu/Loose-GNSS-IMU/Loose-GNSS-IMU/tokyo_imu.csv", fimu);
+	FIO.fileSafeIn("tokyo_imu.csv", fimu);
 
 	OBSgnss.readEpoch(fst_pos);
 	read_imu(); //fill OBSimu

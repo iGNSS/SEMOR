@@ -4,8 +4,8 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "${workspaceFolder}/loose-gnss-imu/Loose-GNSS-IMU/Loose-GNSS-IMU/Libraries/eigen/Eigen/**",
-                "${workspaceFolder}/loose-gnss-imu/Loose-GNSS-IMU/Loose-GNSS-IMU/include"
+                "${workspaceFolder}/loose-gnss-imu/include",
+                "${workspaceFolder}/loose-gnss-imu/Libraries/eigen"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",
