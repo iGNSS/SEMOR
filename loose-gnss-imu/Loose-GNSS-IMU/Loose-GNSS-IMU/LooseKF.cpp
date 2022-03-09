@@ -96,11 +96,11 @@ void LooseKF::SetObs(ReaderGNSS &GNSS, IMUmechECEF& IMU) {
 		_Zobs(i + 3) = IMU._vel[i] - GNSS._GNSSdata.Vxyz(i);
 	}	
 	// Variance
-	_Robs.topLeftCorner(3, 3) = GNSS._GNSSdata.CovPxyz;
+	/*_Robs.topLeftCorner(3, 3) = GNSS._GNSSdata.CovPxyz;
 	_Robs.bottomRightCorner(3, 3) = GNSS._GNSSdata.CovVxyz;
 	// Covariance
 	_Robs.topRightCorner(3, 3) = (GNSS._GNSSdata.CovPVxyz);
-	_Robs.bottomLeftCorner(3, 3) = (GNSS._GNSSdata.CovPVxyz.transpose());
+	_Robs.bottomLeftCorner(3, 3) = (GNSS._GNSSdata.CovPVxyz.transpose());*/
 
 }
 

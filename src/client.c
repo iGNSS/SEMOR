@@ -14,7 +14,7 @@
 #include <math.h>
 #include <sys/poll.h>
 
-#define FILE_PATH "../output.txt"
+#define FILE_PATH "output.txt"
 
 #define GPS_FILE "test/gps.pos"
 #define GALILEO_FILE "test/galileo.pos"
@@ -37,7 +37,6 @@ int isset_first_pos;
 int imu_ready;
 gnss_sol_t first_pos;
 
-char imu_data[200][75]; //Updated by Loosely.cpp
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -90,10 +89,11 @@ gnss_sol_t str2gnss(char str[MAXSTR]){
 }
 
 void gnss2str(char* str, gnss_sol_t gnss){
-    sprintf(str, "%d %d %lf %lf %lf %d %d %lf %lf %lf %lf %lf %lf %f %f %lf %lf %lf", gnss.time.week,
+    /*sprintf(str, "%d %d %lf %lf %lf %d %d %lf %lf %lf %lf %lf %lf %f %f %lf %lf %lf", gnss.time.week,
     gnss.time.sec, gnss.a, gnss.b, gnss.c, gnss.Q, gnss.ns, 
     gnss.sda, gnss.sdb, gnss.sdc, gnss.sdab, gnss.sdbc, gnss.sdca,
-    gnss.age, gnss.ratio, gnss.va, gnss.vb, gnss.vc);
+    gnss.age, gnss.ratio, gnss.va, gnss.vb, gnss.vc);*/
+    sprintf(str, "%d %lf %lf %lf", gnss.time.sec, gnss.a, gnss.b, gnss.c);
 }
 
 void gnsscopy(gnss_sol_t *dest, gnss_sol_t src){
@@ -128,23 +128,25 @@ void process_gnss_data(char buf[MAXSTR], int ins){
     if(ins == 0){ //Se questo handler gestisce la prima istanza di rtkrcv
         if(gps.time.week != 0){ //La soluzione gps precedente non è stata consumata, la invio da sola prima di quella corrente
             gnss2str(sol1, gps);
-            fprintf(file, "ALONE %s\n", sol1);
+            gnss2str(sol3, gps_imu);
+            fprintf(file, "ALONE %s ||| %s\n", sol1, (gps_imu.time.week == -1) ? "IMU initializing" : sol3);
             gps.time.week = 0;
         }
         gps = str2gnss(buf);
         if(isset_first_pos == 0){
-            isset_first_pos == 1;
+            isset_first_pos = 1;
             first_pos = gps;
             init_imu(first_pos);
         }
-        gnsscopy(&gps_imu, gps);
-        imu_sol(&gps_imu);
+            gnsscopy(&gps_imu, gps);
+            gps_imu.time.week = -1;
+            imu_sol(&gps_imu);
         if(galileo.time.week != 0 && gps.time.sec == galileo.time.sec){ //E' arrivata prima la soluzione galileo, quindi posso già farei controlli
             //Add line with both solution side by side to the file
             gnss2str(sol1, gps);
             gnss2str(sol2, galileo);
             gnss2str(sol3, gps_imu);
-            fprintf(file, "%s ||||||||| %s ||||||||| %s\n", sol1, sol2, sol3);
+            fprintf(file, "%s ||| %s ||| %s\n", sol1, sol2, (gps_imu.time.week == -1) ? "IMU initializing" : sol3);
             //Dico alle prossime iterazioni che i precedenti valori sono già stati consumati
             gps.time.week = 0;
             galileo.time.week = 0;
@@ -152,24 +154,25 @@ void process_gnss_data(char buf[MAXSTR], int ins){
     }else{ //Se questo handler gestisce la seconda istanza di rtkrcv
         if(galileo.time.week != 0){ //La soluzione galileo precedente non è stata consumata, la invio da sola prima di quella corrente
             gnss2str(sol2, galileo);
-            fprintf(file, "ALONE %s\n", sol2);
+            gnss2str(sol3, galileo_imu);
+            fprintf(file, "ALONE %s ||| %s\n", sol2, (galileo_imu.time.week == -1) ? "IMU initializing" : sol3);
             galileo.time.week = 0;
         }
         galileo = str2gnss(buf);
-        gnsscopy(&galileo_imu, galileo);
         if(isset_first_pos == 0){ //forse meglio di no
-            isset_first_pos == 1;
+            isset_first_pos = 1;
             first_pos = galileo;
             init_imu(first_pos);
         }
-        gnsscopy(&galileo_imu, galileo);
-        imu_sol(&galileo_imu);
+            gnsscopy(&galileo_imu, galileo);
+            galileo_imu.time.week = -1;
+            imu_sol(&galileo_imu);
         if(gps.time.week != 0 && gps.time.sec == galileo.time.sec){ //E' arrivata prima la soluzione gps, quindi posso già farei controlli
             //Add line with both solution side by side to the file
             gnss2str(sol1, gps);
             gnss2str(sol2, galileo);
             gnss2str(sol3, galileo_imu);
-            fprintf(file, "%s ||||||||| %s ||||||||| %s\n", sol1, sol2, sol3);
+            fprintf(file, "%s ||| %s ||| %s\n", sol1, sol2, (galileo_imu.time.week == -1) ? "IMU initializing" : sol3);
             gps.time.week = 0;
             galileo.time.week = 0;
         }
@@ -218,7 +221,6 @@ void* handle_connection(void* inst_no){
         if(strstr(buf, "lat") || strstr(buf, "latitude") || strlen(buf) < 5){ //Se la linea letta contiene fa parte dell'header
             continue;
         }
-
         process_gnss_data(buf, ins);
         //Simulo 1Hz
         sleep(1);

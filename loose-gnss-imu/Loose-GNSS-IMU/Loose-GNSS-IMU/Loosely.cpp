@@ -13,7 +13,6 @@ using namespace Eigen;
 // PI
 const double PI = 3.1415926535898;
 
-char imu_data[IMU_DATA_LAST_N_SEC * IMU_HZ][75]; //for semor (constants from semor.h) - Last N seconds of imu data (imu send data at IMU_HZ Hz and it's a string of about 75 chars)
 
 IMUmechECEF MechECEF; 
 
@@ -194,25 +193,36 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 		_epochIMU = OBSimu._IMUdata.imuTime;
 	} while (_epochIMU <= (*int_sol).time.sec); //_epochIMU <= _epochGNSS
 
-	// *** Inegrated Solution (Loosely Coupled)
-	//LooseCoupling(OBSgnss, MechECEF);				//This has effects on: MechECEF, on OBSgnss e on INTsol, it utilize (reads data from) GNSSsol
+	// *** Inegrated Solution (Loosely Coupled)	
+	LooseCoupling(OBSgnss, MechECEF);				//This has effects on: MechECEF, on OBSgnss e on INTsol, it utilize (reads data from) GNSSsol
 
 	// *** Read GPS 1Hz
-	//OBSgnss.clearObs();
-	//OBSgnss.readEpoch(*int_sol); //Set gnss position to generate next position with imu (in the next function call)
+	OBSgnss.clearObs();
+	OBSgnss.readEpoch(*int_sol); //Set gnss position to generate next position with imu (in the next function call)
+	_epochGNSS = OBSgnss._GNSSdata.gpsTime;
+	// Process Epoch
+	SolutionGNSS(OBSgnss);	
+
+	//Reinitialize ecef mechanization to have the new gnss location as the initial position
+	//printf("\n%lf %lf %lf\n", (*int_sol).a, (*int_sol).b, (*int_sol).c);
+	/*_ECEF_o = eigVector2std(double2eigVector((*int_sol).a, (*int_sol).b, (*int_sol).c));
+	_LLH_o = ecef2geo(_ECEF_o);	
+	_ECEF_imu = _ECEF_o; GNSSsol.posXYZ = _ECEF_o;
+	GNSSsol.velXYZ = eigVector2std(double2eigVector((*int_sol).va, (*int_sol).vb, (*int_sol).vc));*/
+	//MechECEF.InitializeMechECEF(_ECEF_imu, _LLH_o, GNSSsol.velXYZ, iniIMU._RPY, iniIMU._ACCbias, iniIMU._GYRbias);
 
 	//Return imu solution
 	(*int_sol).a = IMUsol.posXYZ.at(0);
 	(*int_sol).b = IMUsol.posXYZ.at(1);
 	(*int_sol).c = IMUsol.posXYZ.at(2);
-	// Compute timing information
-	//_epochGNSS = OBSgnss._GNSSdata.gpsTime;
-	// Process Epoch
-	//SolutionGNSS(OBSgnss);							//This has effects on: _epochGNSS, GNSSsol
+
+	(*int_sol).time.week = 0;
 }
 
 void Loosely::init_imu(gnss_sol_t fst_pos){
-	fimu.open("tokyo_imu.csv");
+	//fimu.open("tokyo_imu.csv");
+	FileIO FIO;
+	FIO.fileSafeIn("loose-gnss-imu/Loose-GNSS-IMU/Loose-GNSS-IMU/tokyo_imu.csv", fimu);
 
 	OBSgnss.readEpoch(fst_pos);
 	read_imu(); //fill OBSimu
@@ -230,7 +240,7 @@ void Loosely::init_imu(gnss_sol_t fst_pos){
 	// Initial Position in Geodetic and ENU
 	_LLH_o = ecef2geo(_ECEF_o);	
 
-	IMU_INI_TIME_END = _epochIMU+30; // Time taken to initialize the imu  (first imu epoch + 300) (for example)
+	IMU_INI_TIME_END = _epochIMU+60; // Time taken to initialize the imu  (first imu epoch + 300) (for example)
 }
 
 Loosely::Loosely(){

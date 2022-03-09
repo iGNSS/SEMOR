@@ -4,12 +4,11 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "C:/cygwin64/usr/include",
                 "${workspaceFolder}/loose-gnss-imu/Loose-GNSS-IMU/Loose-GNSS-IMU/Libraries/eigen/Eigen/**",
                 "${workspaceFolder}/loose-gnss-imu/Loose-GNSS-IMU/Loose-GNSS-IMU/include"
             ],
             "defines": [],
-            "compilerPath": "C:/cygwin64/bin/gcc.exe",
+            "compilerPath": "/usr/bin/gcc",
             "cStandard": "gnu17",
             "cppStandard": "gnu++14",
             "intelliSenseMode": "linux-gcc-x64"

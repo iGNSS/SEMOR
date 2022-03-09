@@ -16,6 +16,8 @@ const double PI = 3.1415926535898;
 const double mu = 3.986005e14; // Earths Gravitational Constant
 const double J2 = 1.082630e-3; // Second Gravitational Constant
 const double re = 6378137;	 // Equatorial radius
+
+
 							
 // Constructor
 IMUmechECEF::IMUmechECEF(){}
@@ -181,5 +183,13 @@ void IMUmechECEF::MechanizerECEF(double dT, vector<double> acc, vector<double> g
 	_Fe = SkewMat(sf_eib);
 	// Tensor Gravity Gradient
 	_Ne = TensorGravGrad(_pos.at(0), _pos.at(1), _pos.at(2));
+
+	/*
+	x, P, T
+
+
+
+
+	*/
 }
  
