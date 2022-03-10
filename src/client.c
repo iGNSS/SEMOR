@@ -19,18 +19,25 @@
 #define GPS_FILE "test/gps.pos"
 #define GALILEO_FILE "test/galileo.pos"
 
+#define GPS 0
+#define GALILEO 1
+#define IMU 2
+
 //Solutions
-gnss_sol_t gps;
-gnss_sol_t galileo;
+/*gnss_sol_t gps;
+gnss_sol_t galileo;*/
+
+gnss_sol_t sol[3]; /* GPS=0, GALILEO=1, IMU=2 */
+
 
 //Integrated solutions
-gnss_sol_t gps_imu;
-gnss_sol_t galileo_imu;
+/*gnss_sol_t gps_imu;
+gnss_sol_t galileo_imu;*/
 
 FILE *file;
 FILE *p;
-int instance_no[2] = {0, 1};
-pthread_t id[3];
+//int instance_no[2] = {0, 1};
+//pthread_t id[3];
 pid_t str2str_pid, rtkrcv1_pid, rtkrcv2_pid;
 
 int isset_first_pos;
@@ -117,7 +124,7 @@ void gnsscopy(gnss_sol_t *dest, gnss_sol_t src){
     (*dest).vc = src.vc;
 }
 
-void process_gnss_data(char buf[MAXSTR], int ins){
+/*void process_gnss_data(char buf[MAXSTR], int ins){
     char sol1[MAXSTR], sol2[MAXSTR], sol3[MAXSTR];
     gnss_sol_t intsol;
 
@@ -184,54 +191,155 @@ void process_gnss_data(char buf[MAXSTR], int ins){
     //##CHANGED##
     fflush(file);
     pthread_mutex_unlock(&mutex);
+}*/
+
+void print_solutions(){
+    char sol1[MAXSTR], sol2[MAXSTR], sol3[MAXSTR];
+    gnss2str(sol1, sol[GPS]);
+    gnss2str(sol2, sol[GALILEO]);
+    gnss2str(sol3, sol[IMU]);
+    fprintf(file, "%s ||| %s ||| %s\n", sol1, (sol[GALILEO].time.sec == 0) ? "GALILEO initializing" : sol2, (sol[IMU].time.week == -1) ? "IMU initializing" : sol3);
+    fflush(file);
 }
 
-void* handle_connection(void* inst_no){
-    int ins = *((int *) inst_no);
-    struct addrinfo hints, *res;
-    int status;
-    char buf[MAXSTR];
-    int offset = 0;
-    int nbytes;
-    int socketfd; //not socket but file for testing ##CHANGED##
-    char port[5];
-    //##CHANGED##
+int read_gnss(int fd, int* offset, char buf[MAXSTR]){
+    int nbytes = 0;
 
-    //Inizializzo soluzioni imu
-    gps_imu.time.week = -1;
-    galileo_imu.time.week = -1;
-    //Inizializzazione socket
-
-    if(ins == 0){
-        socketfd = open(GPS_FILE, O_RDONLY);
+    //TODO: quando smetto di usare file e riprendo i socket, devo decommentare questa parte e commentare la lettura da file
+    /*if ((nbytes = recv(fd, buf + *offset, (sizeof buf)-*offset, 0)) < 0) {
+        if(errno != EAGAIN){
+            perror("read");
+            close_semor(1);
+        }
     }
-    else{
-        socketfd = open(GALILEO_FILE, O_RDONLY);
-    }
-    //Inizializzazione socket
-    //##CHANGED##
+    *offset = *offset+nbytes;
+    */
 
-    while(1){
-        offset = 0;
-        do{
-            nbytes = read(socketfd, buf+offset, 1);
-            if(nbytes == -1){
-                perror("SEMOR read socket");
-                close_semor(1);
-            }else if(nbytes == 0){ // Rtkrcv1 is down
-                printf("rtkrcv down\n"); //debug
-                continue;
-            }
-            offset++;
-        }while(buf[offset-1] != '\r' && buf[offset-1] != '\n');
-        buf[offset-1] = '\0';
-        
-        if(strstr(buf, "lat") || strstr(buf, "latitude") || strlen(buf) < 5){ //Se la linea letta contiene fa parte dell'header
+    do{
+        nbytes = read(fd, buf+*offset, 1);
+        if(nbytes == -1){
+            perror("SEMOR read socket");
+            close_semor(1);
+        }else if(nbytes == 0){ // Rtkrcv1 is down
+            printf("rtkrcv down\n"); //debug
             continue;
         }
-        process_gnss_data(buf, ins);
+        (*offset)++;
+    }while(buf[(*offset)-1] != '\r' && buf[(*offset)-1] != '\n');
+
+    return nbytes;
+}
+
+int get_best_sol(){ //Checks
+    return GPS;
+}
+
+void handle_connection(){
+    struct addrinfo hints, *res;
+    int status;
+    char buf[2][MAXSTR];
+    int offset[2] = {0, 0};
+    int nbytes;
+    int socketfd[2]; //not socket but file for testing ##CHANGED##
+    char port[5];
+    int ret;
+    int i;
+    struct pollfd fds[3];
+    int timeout_msecs = 500;
+    char cmd;
+    gnss_sol_t best_sol;
+    int best_idx;
+    int no_go = 0; //If got header or GNSS data incomplete
+    int galileo_ready = 0;
+    //##CHANGED##
+
+    //Inizializzo soluzione imu
+    sol[IMU].time.week = -1;
+    //Inizializzazione socket
+
+    socketfd[GPS] = open(GPS_FILE, O_RDONLY);
+    socketfd[GALILEO] = open(GALILEO_FILE, O_RDONLY);
+
+    fds[0].fd = socketfd[GPS];
+    fds[1].fd = socketfd[GALILEO];
+    fds[3].fd = STDIN_FILENO;
+    fds[0].events = fds[1].events = fds[3].events = POLLIN;
+    //Inizializzazione socket
+    //##CHANGED##
+
+    fcntl(0, F_SETFL, fcntl(0, F_GETFL) | O_NONBLOCK);
+
+    while(1){
+        ret = poll(fds, 2, timeout_msecs);
+        if (ret == -1){
+            perror("poll");
+            close_semor(1);
+        }
+        if(fds[3].revents & POLLIN){ //Get input from standard input
+            cmd = getchar();
+            if(cmd == 'q' || cmd == 'Q'){
+                close_semor(0);
+            }
+        }
+        for(i = 0; i < 2; i++){ //Get GPS and GALILEO solutions
+            if(fds[i].revents & POLLIN){
+                read_gnss(socketfd[i], &offset[i], buf[i]);
+                if(offset[i] != 0 && buf[i][offset[i]-1] == '\r' || buf[i][offset[i]-1] == '\n'){
+                    buf[i][offset[i]-1] = '\0';
+                    offset[i] = 0;
+                    if(strstr(buf[i], "lat") || strstr(buf[i], "latitude") || strlen(buf[i]) < 5){ //Continue if the buffer contains the header
+                        no_go |= i+1;
+                        continue;
+                    }
+                    sol[i] = str2gnss(buf[i]);
+                    if(i == GPS && isset_first_pos == 0){ //Initialize imu with GPS solution
+                        isset_first_pos = 1;
+                        init_imu(sol[i]);
+                    }
+                    if(i == GALILEO){
+                        galileo_ready = 1;
+                    }
+                }
+                else{
+                    no_go |= i+1;
+                }
+            }
+        }
+        if(no_go == 3){
+            no_go = 0;
+            continue;
+        }
+        if(no_go != 0 && galileo_ready == 1){ //One of the two gnss solutions isn't ready
+            continue;
+        }
+        if(sol[IMU].time.sec == 0){ //IMU is initializing
+            print_solutions();
+            //TODO: Return GPS data
+
+            gnsscopy(&sol[IMU], sol[GPS]); //Irrelevant to use GPS or GALILEO, we only need a copy of the time
+            sol[IMU].time.week = -1;
+            sol[IMU].time.sec += 1; //Get imu position of the next second
+            imu_sol(&sol[IMU]);
+        }
+        else{//Get best solution between GPS, GALILEO, IMU
+            if(sol[GPS].time.sec == sol[GALILEO].time.sec){ //Se le epoche GPS e GALILEO coincidono
+                best_idx = get_best_sol(&best_sol);
+                print_solutions();
+                //TODO: Return best sol
+
+                //Process imu for next epoch
+                gnsscopy(&sol[IMU], sol[best_idx]); //Irrelevant to use GPS or GALILEO, we only need a copy of the time
+                sol[IMU].time.week = -1;
+                sol[IMU].time.sec += 1; //Get imu position of the next second
+                imu_sol(&sol[IMU]); //this takes 1 second
+            }
+            else{ //Altrimenti prendo quella più recente e decido se dare in output quella posizione o quella dell'imu
+                
+            }
+        }
+
         //Simulo 1Hz
-        //sleep(1);
+        sleep(1);
     }
 
 
@@ -248,20 +356,6 @@ void start_processing(void){
     }
     fflush(file);
 
-    //Ho bisogno di avviare gli handler in thread separati in caso una delle due istanze di rtkrcv non sia up in un determinato momento
-    //Avvio handler per rtkrcv1
-    ret = pthread_create(&id[0], NULL, handle_connection, (void *)&instance_no[0]);
-    if(ret != 0){
-        errno = ret;
-        perror("SEMOR: thread create 0");
-        close_semor(1);
-    }
-    //Avvio handler per rtkrcv2
-    ret = pthread_create(&id[1], NULL, handle_connection, (void *)&instance_no[1]);
-    if(ret != 0){
-        errno = ret;
-        perror("SEMOR: thread create 1");
-        close_semor(1);
-    }
+    handle_connection();
 }
 

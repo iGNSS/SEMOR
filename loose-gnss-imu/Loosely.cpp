@@ -188,8 +188,9 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 		return;
 	}
 	//If imu is ready:
-	/*_ECEF_o = eigVector2std(double2eigVector((*int_sol).a, (*int_sol).b, (*int_sol).c));
-	_LLH_o = ecef2geo(_ECEF_o);	*/
+
+	_ECEF_o = eigVector2std(double2eigVector((*int_sol).a, (*int_sol).b, (*int_sol).c));
+	_LLH_o = ecef2geo(_ECEF_o);	
 	do {
 		read_imu();
 		//printf("%lf\n", _epochIMU);
@@ -214,9 +215,6 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 	//SolutionGNSS(OBSgnss);	
 
 	//Reinitialize ecef mechanization to have the new gnss location as the initial position
-
-	_ECEF_o = eigVector2std(double2eigVector((*int_sol).a, (*int_sol).b, (*int_sol).c));
-	_LLH_o = ecef2geo(_ECEF_o);	
 
 	//_ECEF_imu = _ECEF_o; GNSSsol.posXYZ = _ECEF_o;
 	//GNSSsol.velXYZ = eigVector2std(double2eigVector((*int_sol).va, (*int_sol).vb, (*int_sol).vc));
@@ -252,7 +250,7 @@ void Loosely::init_imu(gnss_sol_t fst_pos){
 	// Initial Position in Geodetic and ENU
 	_LLH_o = ecef2geo(_ECEF_o);	
 
-	IMU_INI_TIME_END = _epochIMU+60; // Time taken to initialize the imu  (first imu epoch + 300) (for example)
+	IMU_INI_TIME_END = _epochIMU+30; // Time taken to initialize the imu  (first imu epoch + 300) (for example)
 }
 
 Loosely::Loosely(){

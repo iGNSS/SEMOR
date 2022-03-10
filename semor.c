@@ -80,6 +80,9 @@ int main(){
     /*
     Semor starts here
     */
+
+    printf("\n");
+    printf("SEMOR: press q to stop\n");
     start_processing();
 
 
