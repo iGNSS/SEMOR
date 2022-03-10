@@ -86,16 +86,6 @@ int main(){
     start_processing();
 
 
-    //Stop semor
-    printf("\n");
-    printf("SEMOR: press q to stop\n");
-    do{
-        cmd = getchar();
-    }while(cmd != 'q' && cmd != 'Q');
-
-    close_semor(0);
-
-    printf("\nSEMOR stopped.\n");
 
     return 0;
 }

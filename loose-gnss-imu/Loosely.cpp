@@ -7,6 +7,7 @@
 
 #include "pch.h"
 #include "Loosely.h"
+#include "ReadIMU.h"
 using namespace std;
 using namespace Eigen;
 
@@ -26,6 +27,12 @@ ReaderIMU OBSimu;
 
 void read_imu(){
 	string line;
+	//Read IMU i2c
+	char buf[IMU_LENGTH];
+	read_raw_imu(buf);
+	//TODO: char[] to line
+
+	//Read IMU file
 	getline(fimu, line);
 	if (line.find("GPS") != std::string::npos) {
 		getline(fimu, line);
@@ -178,6 +185,7 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 				IMUsol.posXYZ = _ECEF_imu;*/
 
 				imu_ready = 1; //Tells client.c that it can read imu data
+				printf("inizializzazione finita\n");
 			}
 			read_imu();
 			if(imu_ready){
@@ -188,9 +196,11 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 		return;
 	}
 	//If imu is ready:
-
 	_ECEF_o = eigVector2std(double2eigVector((*int_sol).a, (*int_sol).b, (*int_sol).c));
 	_LLH_o = ecef2geo(_ECEF_o);	
+	_ECEF_imu = _ECEF_o; GNSSsol.posXYZ = _ECEF_o;
+	GNSSsol.velXYZ = eigVector2std(double2eigVector((*int_sol).va, (*int_sol).vb, (*int_sol).vc));
+	MechECEF.InitializeMechECEF(_ECEF_imu, _LLH_o, GNSSsol.velXYZ, iniIMU._RPY, iniIMU._ACCbias, iniIMU._GYRbias);
 	do {
 		read_imu();
 		//printf("%lf\n", _epochIMU);
@@ -250,7 +260,7 @@ void Loosely::init_imu(gnss_sol_t fst_pos){
 	// Initial Position in Geodetic and ENU
 	_LLH_o = ecef2geo(_ECEF_o);	
 
-	IMU_INI_TIME_END = _epochIMU+30; // Time taken to initialize the imu  (first imu epoch + 300) (for example)
+	IMU_INI_TIME_END = _epochIMU+300; // Time taken to initialize the imu  (first imu epoch + 300) (for example)
 }
 
 Loosely::Loosely(){

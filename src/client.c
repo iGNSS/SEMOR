@@ -44,6 +44,11 @@ int isset_first_pos;
 int imu_ready;
 gnss_sol_t first_pos;
 
+int wait_other[2] = {0, 0};
+
+gnss_sol_t best_sol;
+int best_idx;
+
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -63,6 +68,7 @@ void close_semor(int status){
     fclose(file);
     if(p != NULL)
         fclose(p);
+    printf("\nSEMOR terminated.\n");
     exit(status);
 }
 
@@ -234,6 +240,37 @@ int get_best_sol(){ //Checks
     return GPS;
 }
 
+void process_solutions(){
+    if(sol[IMU].time.sec == 0){ //IMU is initializing
+        print_solutions();
+        //TODO: Return GPS data
+
+        gnsscopy(&sol[IMU], sol[GPS]); //Irrelevant to use GPS or GALILEO, we only need a copy of the time
+        sol[IMU].time.week = -1;
+        sol[IMU].time.sec += 1; //Get imu position of the next second
+        imu_sol(&sol[IMU]);
+        }
+    else{//Get best solution between GPS, GALILEO, IMU
+        if(sol[GPS].time.sec == sol[GALILEO].time.sec){ //Se le epoche GPS e GALILEO coincidono
+            best_idx = get_best_sol(&best_sol);
+            print_solutions();
+            //TODO: Return best sol
+
+            //Process imu for next epoch
+            gnsscopy(&sol[IMU], sol[best_idx]); //Irrelevant to use GPS or GALILEO, we only need a copy of the time
+            sol[IMU].time.week = -1;
+            sol[IMU].time.sec += 1; //Get imu position of the next second
+            imu_sol(&sol[IMU]); //this takes 1 second
+        }
+        else{ //Altrimenti prendo quella più recente e decido se dare in output quella posizione o quella dell'imu
+            if(sol[GPS].time.sec < sol[GALILEO].time.sec)
+                wait_other[GALILEO] = 1;
+            else
+                wait_other[GPS] = 1;
+        }
+    }
+}
+
 void handle_connection(){
     struct addrinfo hints, *res;
     int status;
@@ -247,8 +284,6 @@ void handle_connection(){
     struct pollfd fds[3];
     int timeout_msecs = 500;
     char cmd;
-    gnss_sol_t best_sol;
-    int best_idx;
     int no_go = 0; //If got header or GNSS data incomplete
     int galileo_ready = 0;
     //##CHANGED##
@@ -266,23 +301,29 @@ void handle_connection(){
     fds[0].events = fds[1].events = fds[3].events = POLLIN;
     //Inizializzazione socket
     //##CHANGED##
-
     fcntl(0, F_SETFL, fcntl(0, F_GETFL) | O_NONBLOCK);
-
     while(1){
         ret = poll(fds, 2, timeout_msecs);
         if (ret == -1){
             perror("poll");
             close_semor(1);
         }
-        if(fds[3].revents & POLLIN){ //Get input from standard input
+        //if(fds[3].revents & POLLIN){ //Get input from standard input
             cmd = getchar();
             if(cmd == 'q' || cmd == 'Q'){
                 close_semor(0);
             }
-        }
+       // }
         for(i = 0; i < 2; i++){ //Get GPS and GALILEO solutions
             if(fds[i].revents & POLLIN){
+                if(wait_other[i] == 2){
+                    wait_other[i] = 0;
+
+                }
+                if(wait_other[i] == 1){
+                    wait_other[i] = 2;
+                    continue;
+                }
                 read_gnss(socketfd[i], &offset[i], buf[i]);
                 if(offset[i] != 0 && buf[i][offset[i]-1] == '\r' || buf[i][offset[i]-1] == '\n'){
                     buf[i][offset[i]-1] = '\0';
@@ -307,39 +348,18 @@ void handle_connection(){
         }
         if(no_go == 3){
             no_go = 0;
+            printf("no go 3\n");
             continue;
         }
         if(no_go != 0 && galileo_ready == 1){ //One of the two gnss solutions isn't ready
+            printf("no go\n");
             continue;
         }
-        if(sol[IMU].time.sec == 0){ //IMU is initializing
-            print_solutions();
-            //TODO: Return GPS data
 
-            gnsscopy(&sol[IMU], sol[GPS]); //Irrelevant to use GPS or GALILEO, we only need a copy of the time
-            sol[IMU].time.week = -1;
-            sol[IMU].time.sec += 1; //Get imu position of the next second
-            imu_sol(&sol[IMU]);
-        }
-        else{//Get best solution between GPS, GALILEO, IMU
-            if(sol[GPS].time.sec == sol[GALILEO].time.sec){ //Se le epoche GPS e GALILEO coincidono
-                best_idx = get_best_sol(&best_sol);
-                print_solutions();
-                //TODO: Return best sol
-
-                //Process imu for next epoch
-                gnsscopy(&sol[IMU], sol[best_idx]); //Irrelevant to use GPS or GALILEO, we only need a copy of the time
-                sol[IMU].time.week = -1;
-                sol[IMU].time.sec += 1; //Get imu position of the next second
-                imu_sol(&sol[IMU]); //this takes 1 second
-            }
-            else{ //Altrimenti prendo quella più recente e decido se dare in output quella posizione o quella dell'imu
-                
-            }
-        }
-
+        process_solutions();
+        
         //Simulo 1Hz
-        sleep(1);
+        usleep(25000);
     }
 
 

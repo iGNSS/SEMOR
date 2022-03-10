@@ -6,3 +6,4 @@ test2.pos
 rtkrcv.nav
 bin/*.o
 build/*
+prove/*
