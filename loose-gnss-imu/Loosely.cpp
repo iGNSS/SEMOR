@@ -28,8 +28,8 @@ ReaderIMU OBSimu;
 void read_imu(){
 	string line;
 	//Read IMU i2c
-	char buf[IMU_LENGTH];
-	read_raw_imu(buf);
+	//char buf[IMU_LENGTH];
+	//read_raw_imu(buf);
 	//TODO: char[] to line
 
 	//Read IMU file
@@ -260,7 +260,7 @@ void Loosely::init_imu(gnss_sol_t fst_pos){
 	// Initial Position in Geodetic and ENU
 	_LLH_o = ecef2geo(_ECEF_o);	
 
-	IMU_INI_TIME_END = _epochIMU+300; // Time taken to initialize the imu  (first imu epoch + 300) (for example)
+	IMU_INI_TIME_END = _epochIMU+10; // Time taken to initialize the imu  (first imu epoch + 300) (for example)
 }
 
 Loosely::Loosely(){
