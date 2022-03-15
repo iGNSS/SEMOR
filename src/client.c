@@ -25,11 +25,14 @@
 #define GALILEO 1
 #define IMU 2
 
+#define THRESHOLD 0.2
+
 //Solutions
 /*gnss_sol_t gps;
 gnss_sol_t galileo;*/
 
 gnss_sol_t sol[3]; /* GPS=0, GALILEO=1, IMU=2 */
+gnss_sol_t best;
 
 
 //Integrated solutions
@@ -48,9 +51,6 @@ gnss_sol_t first_pos;
 int wait_read[2] = {0, 0};
 int last_week[2];
 int seconds;
-
-gnss_sol_t best_sol;
-int best_idx;
 
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -159,7 +159,7 @@ int read_gnss(int fd, int* offset, char buf[MAXSTR]){
             perror("SEMOR read socket");
             close_semor(1);
         }else if(nbytes == 0){ // Rtkrcv1 is down
-            printf("rtkrcv down\n"); //debug
+            printf("nothing to read\n"); //debug
             continue;
         }
         (*offset)++;
@@ -168,12 +168,108 @@ int read_gnss(int fd, int* offset, char buf[MAXSTR]){
     return nbytes;
 }
 
+int similar_pos(gnss_sol_t p1, gnss_sol_t p2){
+    int threshold;
+    //Check a
+    if(p1.a < p2.a){
+        if(!(p1.a+3*p1.sda > p2.a-3*p2.sda && fabs(p1.a+3*p1.sda-p2.a-3*p2.sda) < THRESHOLD)){
+            return 0;
+        }
+    }
+    else{
+        if(!(p2.a+3*p2.sda > p1.a-3*p1.sda && fabs(p2.a+3*p2.sda-p1.a-3*p1.sda) < THRESHOLD)){
+            return 0;
+        }
+    }
+    /*if(!(((p1.a+3*p1.sda > p2.a-3*p2.sda && p1.a-3*p1.sda < p2.a-3*p2.sda) || (p1.a-3*p1.sda < p2.a+3*p2.sda && p1.a-3*p1.sda > p2.a-3*p2.sda)) && fabs(p1.a+3*p1.sda - p2.a-3*p2.sda) < THRESHOLD || fabs(p2.a+3*p2.sda - p1.a-3*p1.sda))){
+        return 0;
+    }*/
+
+    //Check b
+    if(p1.b < p2.b){
+        if(!(p1.b+3*p1.sdb > p2.b-3*p2.sdb && fabs(p1.b+3*p1.sdb-p2.b-3*p2.sdb) < THRESHOLD)){
+            return 0;
+        }
+    }
+    else{
+        if(!(p2.b+3*p2.sdb > p1.b-3*p1.sdb && fabs(p2.b+3*p2.sdb-p1.b-3*p1.sdb) < THRESHOLD)){
+            return 0;
+        }
+    }
+    
+    /*if(!(((3*p1.sdb > -3*p2.sdb && -3*p1.sdb < -3*p2.sdb) || (-3*p1.sdb < 3*p2.sdb && -3*p1.sdb > -3*p2.sdb)) && (fabs(3*p1.sdb - 3*p2.sdb) < THRESHOLD))){
+        return 0;
+    }*/
+    //Check c
+    if(p1.c < p2.c){
+        if(!(p1.c+3*p1.sdc > p2.c-3*p2.sdc && fabs(p1.c+3*p1.sdc-p2.c-3*p2.sdc) < THRESHOLD)){
+            return 0;
+        }
+    }
+    else{
+        if(!(p2.c+3*p2.sdc > p1.c-3*p1.sdc && fabs(p2.c+3*p2.sdc-p1.c-3*p1.sdc) < THRESHOLD)){
+            return 0;
+        }
+    }
+    /*if(!(((3*p1.sdc > -3*p2.sdc && -3*p1.sdc < -3*p2.sdc) || (-3*p1.sdc < 3*p2.sdc && -3*p1.sdc > -3*p2.sdc)) && fabs(3*p1.sdc - 3*p2.sdc) < THRESHOLD)){
+        return 0;
+    }*/
+
+    return 1;
+}
+
+void gnss_avg_2(gnss_sol_t sol1, gnss_sol_t sol2){
+    best.a = (sol1.a + sol2.a)/2;
+    best.b = (sol1.b + sol2.b)/2;
+    best.c = (sol1.c + sol2.c)/2;
+}
+
+void gnss_avg_3(gnss_sol_t sol1, gnss_sol_t sol2, gnss_sol_t sol3){
+    best.a = (sol1.a + sol2.a + sol3.a)/3;
+    best.b = (sol1.b + sol2.b + sol3.b)/3;
+    best.c = (sol1.c + sol2.c + sol3.c)/3;
+}
+
+int get_best_sol2(int sol1_idx, int sol2_idx){ //if 2 gnss solutions available - 0: no best found, 1: best found
+    if(similar_pos(sol[sol1_idx], sol[sol2_idx])){
+        gnss_avg_2(sol[sol1_idx], sol[sol2_idx]);
+        return 1;
+    }
+    return 0;
+}
+
+int get_best_sol_3(){ //if 3 solutions available - 0: no best found, 1: best found
+    if(similar_pos(sol[GPS], sol[GALILEO])){
+        if(similar_pos(sol[GPS], sol[IMU])){
+            gnss_avg_3(sol[GPS], sol[GALILEO], sol[IMU]);
+            return 1;
+        }
+        //Solo le due soluzioni GNSS sono simili
+        gnss_avg_2(sol[GPS], sol[GALILEO]);
+        return 1;
+    }
+
+    if(similar_pos(sol[GPS], sol[IMU])){
+        gnss_avg_2(sol[GPS], sol[IMU]);
+        return 1;
+    }
+
+    if(similar_pos(sol[GALILEO], sol[IMU])){
+        gnss_avg_2(sol[GALILEO], sol[IMU]);
+        return 1;
+    }
+    return 0;
+}
+
 void process_solutions(int* check_sols){
     int chk_sols = *check_sols;
     int i;
+    int best_found = 1;
+    int best_idx = -1; //0: gps, 1:galileo, 2:imu, 3:best
 
     if(DEBUG_FILE){
-        for(i = 0; i < 2; i++){
+        for(i = 0; i < 2; i++){ //for each gnss solution check if its epoch is higher than the "seconds" variable, if so wait next iterations 
+        //before displaying the solution till epochs are equal
             if(sol[i].time.sec > seconds){
                 if(!wait_read[i])
                     last_week[i] = sol[i].time.week;
@@ -189,18 +285,35 @@ void process_solutions(int* check_sols){
             }
         }
     }
-    
+    if(sol[IMU].time.week != -1) 
+        chk_sols |= 4;
     switch(chk_sols){ //Get best solution between GPS, GALILEO, IMU
-        case 0: //only IMU
-            if(sol[IMU].time.week == -1) 
-                break;
-            break;
+        case 0: //no solutions, return
+            return;
         case 1: //only GPS
+            best_idx = GPS;
             break;
         case 2: // only GALILEO
+            best_idx = GALILEO;
             break;
-        case 3:
-            
+        case 3: //GPS and GALILEO
+            best_idx = 3;
+            best_found = get_best_sol2(GPS, GALILEO);
+            break;
+        case 4: //only IMU
+            best_idx = IMU;
+            break;
+        case 5: //GPS and IMU
+            best_idx = 3;
+            best_found = get_best_sol2(GPS, IMU);
+            break;
+        case 6: //GALILEO and IMU
+            best_idx = 3;
+            best_found = get_best_sol2(GALILEO, IMU);
+            break;
+        case 7: //all solutions available
+            best_idx = 3;
+            best_found = get_best_sol_3();
             break;
     }
     if(!wait_read[GPS]) //DEBUG ________ RIMUOVERE!!!!!!!
@@ -211,11 +324,14 @@ void process_solutions(int* check_sols){
     //Here we have the best position
     print_solutions();
     //So let's generate the next imu position
-    sol[IMU].time.week = -1;
     if(best_idx != -1){ //se c'è una soluzione migliore:
         gnsscopy(&sol[IMU], sol[best_idx]); //TODO: get best solution
+        sol[IMU].time.week = -1;
         sol[IMU].time.sec += 1; //Get imu position of the next second
         imu_sol(&sol[IMU]); //this takes 1 second
+    }
+    else{
+        sol[IMU].time.week = -1; //if no best solutions, mark the imu solution as already used
     }
 
 }
@@ -238,7 +354,7 @@ void handle_connection(){
     int ret;
     int i;
     struct pollfd fds[3];
-    int timeout_msecs = 500;
+    int timeout_msecs = 1000;
     int check_sols = 0; //3 if both rtk and ppp are read, 1 if only rtk read, 2 if only ppp and 0 if none
     int galileo_ready = 0;
     int new_gnss_data = 0;
@@ -259,29 +375,29 @@ void handle_connection(){
 
     while(1){
         check_sols = 0;
-        ret = poll(fds, 2, timeout_msecs);
+        ret = poll(fds, 2, timeout_msecs); //wait for events on the 3 fds
         if (ret == -1){
             perror("SEMOR: poll");
             close_semor(1);
         }
-        //if(fds[3].revents & POLLIN){ //Get input from standard input
-        check_termination();
+        //if(fds[3].revents & POLLIN){
+        check_termination(); //Check if user requested the termination of the process
        // }
-       usleep(300000); //gives time to the solutions to be read
         for(i = 0; i < 2; i++){ //Get GPS and GALILEO solutions
+        usleep(150000); //gives time to the solutions to be read (if one of them is late)
             if(fds[i].revents & POLLIN){
-                if(wait_read[i]){
+                if(DEBUG_FILE && wait_read[i]){ //Don't read solution i (0:GPS, 1:GALILEO) if the solution in the previous iterations has a higher epoch than "seconds" variable
                     continue;
                 }
                 read_gnss(socketfd[i], &offset[i], buf[i]);
-                if(offset[i] != 0 && buf[i][offset[i]-1] == '\r' || buf[i][offset[i]-1] == '\n'){
-                    buf[i][offset[i]-1] = '\0';
-                    offset[i] = 0;
-                    if(!(strstr(buf[i], "lat") || strstr(buf[i], "latitude") || strlen(buf[i]) < 5)){ //Continue if the buffer contains the header or empty line
+                if(offset[i] != 0 && buf[i][offset[i]-1] == '\r' || buf[i][offset[i]-1] == '\n'){ //If incoming data is a full gnss measurement string
+                    buf[i][offset[i]-1] = '\0'; //Replace new line with end of string
+                    offset[i] = 0; //Reset offset for next reads
+                    if(!(strstr(buf[i], "lat") || strstr(buf[i], "latitude") || strlen(buf[i]) < 5)){ //Check if the input string contains gnss data or if it is an empty line or header
                         check_sols |= i+1;
                     }
-                    sol[i] = str2gnss(buf[i]);
-                    if(i == GPS && isset_first_pos == 0){ //Initialize imu with GPS solution
+                    sol[i] = str2gnss(buf[i]);//Parse string to gnss_sol_t structure
+                    if(i == GPS && !isset_first_pos){ //Initialize imu with rtk solution (since it is more accurate)
                         isset_first_pos = 1;
                         init_imu(sol[i]);
                     }
@@ -291,14 +407,14 @@ void handle_connection(){
 
         if(DEBUG_FILE){
             if(seconds == 0){
-                seconds = (sol[GPS].time.sec <= sol[GALILEO].time.sec) ? sol[GPS].time.sec : sol[GALILEO].time.sec;
+                seconds = (sol[GPS].time.sec <= sol[GALILEO].time.sec) ? sol[GPS].time.sec : sol[GALILEO].time.sec; //Set current second to the minimum of the epochs of the 2 gnss solution
             }
         }
 
-        process_solutions(&check_sols);
+        process_solutions(&check_sols); //Get best solution, output it and use it to calculate next imu position
 
         if(DEBUG_FILE)
-            seconds++;
+            seconds++; //Update current second
     }
 
 

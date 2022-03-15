@@ -14,6 +14,22 @@ using namespace Eigen;
 // PI
 const double PI = 3.1415926535898;
 
+//Variance
+Eigen::VectorXd x;
+Eigen::Matrix<double, 11, 11> P;
+Eigen::MatrixXd v;
+Eigen::MatrixXd R;
+Eigen::MatrixXd H;
+Eigen::MatrixXd T;
+Eigen::Matrix<double, 1, 15> xa;
+Eigen::Matrix<double, 15, 15> Pa;
+const std::vector<double> init_att_unc = {0.3, 0.3, 0.5};
+const std::vector<int> init_vel_unc = {10, 10, 10};
+const std::vector<int> init_pos_unc = {30, 30, 30};
+const double init_bg_unc = 4.8481367284e-05;
+const double init_ba_unc = 9.80665E-3;
+int fst_pos = 1;
+
 
 IMUmechECEF MechECEF; 
 
@@ -180,9 +196,6 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 				_dT = 1.0;
 				// Initialize IMU Mechanization
 				MechECEF.InitializeMechECEF(_ECEF_imu, _LLH_o, GNSSsol.velXYZ, iniIMU._RPY, iniIMU._ACCbias, iniIMU._GYRbias);
-				/*read_imu();
-				_epochIMU = OBSimu._IMUdata.imuTime;
-				IMUsol.posXYZ = _ECEF_imu;*/
 
 				imu_ready = 1; //Tells client.c that it can read imu data
 				printf("inizializzazione finita\n");
@@ -190,57 +203,43 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 			read_imu();
 			if(imu_ready){
 				_epochIMU = OBSimu._IMUdata.imuTime;
-				IMUsol.posXYZ = _ECEF_imu;
 			}
 		}
 		return;
 	}
 	//If imu is ready:
+
+	//Initialize IMU mechanization with initial position, initial velocity and biases
 	_ECEF_o = eigVector2std(double2eigVector((*int_sol).a, (*int_sol).b, (*int_sol).c));
 	_LLH_o = ecef2geo(_ECEF_o);	
-	_ECEF_imu = _ECEF_o; GNSSsol.posXYZ = _ECEF_o;
+	_ECEF_imu = _ECEF_o;
 	GNSSsol.velXYZ = eigVector2std(double2eigVector((*int_sol).va, (*int_sol).vb, (*int_sol).vc));
 	MechECEF.InitializeMechECEF(_ECEF_imu, _LLH_o, GNSSsol.velXYZ, iniIMU._RPY, iniIMU._ACCbias, iniIMU._GYRbias);
 	do {
 		read_imu();
-		//printf("%lf\n", _epochIMU);
+
 		// Process IMU
-		SolutionIMU(OBSimu, MechECEF);				//This has effects on: MechECEF e IMUsol
-		/*_ECEF_o = eigVector2std(double2eigVector(IMUsol.posXYZ.at(0), IMUsol.posXYZ.at(1), IMUsol.posXYZ.at(2)));
-		_LLH_o = ecef2geo(_ECEF_o);	*/
+		SolutionIMU(OBSimu, MechECEF);				//Get position from current MechECEF state and IMU data just read - This has effects on: MechECEF e IMUsol
 
 		//Update Time
 		_epochIMU = OBSimu._IMUdata.imuTime;
-	} while (_epochIMU <= (*int_sol).time.sec); //_epochIMU <= _epochGNSS
-
-	//cout << "-------------------" << endl;
-	// *** Inegrated Solution (Loosely Coupled)	
-	//LooseCoupling(OBSgnss, MechECEF);				//This has effects on: MechECEF, on OBSgnss e on INTsol, it utilize (reads data from) GNSSsol
-
-	// *** Read GPS 1Hz
-	OBSgnss.clearObs();
-	OBSgnss.readEpoch(*int_sol); //Set gnss position to generate next position with imu (in the next function call)
-	_epochGNSS = OBSgnss._GNSSdata.gpsTime;
-	// Process Epoch
-	//SolutionGNSS(OBSgnss);	
-
-	//Reinitialize ecef mechanization to have the new gnss location as the initial position
-
-	//_ECEF_imu = _ECEF_o; GNSSsol.posXYZ = _ECEF_o;
-	//GNSSsol.velXYZ = eigVector2std(double2eigVector((*int_sol).va, (*int_sol).vb, (*int_sol).vc));
-	//MechECEF.InitializeMechECEF(_ECEF_imu, _LLH_o, GNSSsol.velXYZ, iniIMU._RPY, iniIMU._ACCbias, iniIMU._GYRbias);
+	} while (_epochIMU <= (*int_sol).time.sec);
 
 	//Return imu solution
 	(*int_sol).a = IMUsol.posXYZ.at(0);
 	(*int_sol).b = IMUsol.posXYZ.at(1);
 	(*int_sol).c = IMUsol.posXYZ.at(2);
-	//printf("%d %lf %lf %lf\n", (*int_sol).time.sec, (*int_sol).a, (*int_sol).b, (*int_sol).c);
 
+	//With standard deviation
+	if(fst_pos){ //Use P instead of x
+
+	}
+
+	//Mark imu solution as usable for the comparison (in order to get the best solution for SEMOR)
 	(*int_sol).time.week = 0;
 }
 
 void Loosely::init_imu(gnss_sol_t fst_pos){
-	//fimu.open("tokyo_imu.csv");
 	FileIO FIO;
 	FIO.fileSafeIn("tokyo_imu.csv", fimu);
 
@@ -264,7 +263,12 @@ void Loosely::init_imu(gnss_sol_t fst_pos){
 }
 
 Loosely::Loosely(){
-
+	Eigen::Matrix< double, 11, 1> initP;
+	initP << pow(0.3, 2), pow(0.3, 2), pow(0.5, 2), pow(10, 2), pow(10, 2), pow(10, 2), pow(30, 2), pow(30, 2), pow(30, 2), pow(init_bg_unc, 2), pow(init_ba_unc, 2);
+	
+	P = initP.array().square().matrix().asDiagonal();
+	xa.Zero();
+	Pa.Zero();
 }
 
 // Facilitates the GNSS-IMU Loose integration process

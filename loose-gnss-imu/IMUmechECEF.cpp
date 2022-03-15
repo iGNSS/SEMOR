@@ -7,6 +7,7 @@
 
 #include "pch.h"
 #include "IMUmechECEF.h"
+#include <cmath>
 using namespace std;
 using namespace Eigen;
 
@@ -183,13 +184,5 @@ void IMUmechECEF::MechanizerECEF(double dT, vector<double> acc, vector<double> g
 	_Fe = SkewMat(sf_eib);
 	// Tensor Gravity Gradient
 	_Ne = TensorGravGrad(_pos.at(0), _pos.at(1), _pos.at(2));
-
-	/*
-	x, P, T
-
-
-
-
-	*/
 }
  
