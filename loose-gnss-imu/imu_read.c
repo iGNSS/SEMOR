@@ -273,6 +273,7 @@ int i2c_write(int length)
 }
 
 #define USE_FIFO 1
+#define ADD_STAMP 1
 
 void read_raw_imu(char buf[IMU_LENGTH]){
 
@@ -306,8 +307,18 @@ void read_raw_imu(char buf[IMU_LENGTH]){
 		if (i2c_write(2) != 2)
 			continue;
 		
+		//Counter
+		i2c_buf[0] = CTRL10_C;
+		#if ADD_STAMP
+			i2c_buf[1] = 1;
+		#else
+			i2c_buf[1] = 0;
+		#endif
+        if (i2c_write(2) != 2)
+            continue;
 
 		// FIFO, no batching, stop when full
+		
 		i2c_buf[0] = FIFO_CTRL1;
 	#if USE_FIFO
 		i2c_buf[1] = 0;

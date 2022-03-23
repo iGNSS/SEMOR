@@ -11,23 +11,43 @@
 using namespace std;
 using namespace Eigen;
 
+
 // PI
 const double PI = 3.1415926535898;
 
 //Variance
-Eigen::VectorXd x;
-Eigen::Matrix<double, 11, 11> P;
-Eigen::MatrixXd v;
-Eigen::MatrixXd R;
-Eigen::MatrixXd H;
-Eigen::MatrixXd T;
-Eigen::Matrix<double, 1, 15> xa;
-Eigen::Matrix<double, 15, 15> Pa;
-const std::vector<double> init_att_unc = {0.3, 0.3, 0.5};
-const std::vector<int> init_vel_unc = {10, 10, 10};
-const std::vector<int> init_pos_unc = {30, 30, 30};
-const double init_bg_unc = 4.8481367284e-05;
-const double init_ba_unc = 9.80665E-3;
+MatrixXd x(1, 15);
+MatrixXd P(15, 15);
+MatrixXd Q(15, 15);
+MatrixXd v;
+MatrixXd R;
+MatrixXd H;
+//Dblh2Dxyz
+MatrixXd T;
+MatrixXd Dxyz;
+//blh2xyz
+MatrixXd Cen(3, 3);
+MatrixXd xyz(1, 3);
+
+MatrixXd Cnb(3, 3);
+
+Matrix<double, 1, 15> xa;
+Matrix<double, 15, 15> Pa;
+MatrixXd init_att_unc(1, 3);
+MatrixXd init_vel_unc(1, 3);
+MatrixXd init_pos_unc(1, 3);
+double init_bg_unc = 4.8481367284e-05;
+double init_ba_unc = 0.048901633857000000;
+double psd_gyro  = 3.38802348178723e-09;
+double psd_acce      =     2.60420170553977e-06;     // acce noise PSD (m^2/s^3)  
+double psd_bg        =     2.61160339323310e-14;     // gyro bias random walk PSD (rad^2/s^3)
+double psd_ba        =     1.66067346797506e-09;
+const int sample_rate = 104;
+const int nt=1/sample_rate;
+const double D2R = PI/180.0;
+const double RE_WGS84 = 6378137.0;
+const double FE_WGS84    =(1.0/298.257223563); //earth flattening (WGS84)
+const double ECC_WGS84   =sqrt(2*FE_WGS84-pow(FE_WGS84, 2)); 
 int fst_pos = 1;
 
 
@@ -40,6 +60,13 @@ double IMU_INI_TIME_END;
 
 ReaderGNSS OBSgnss;
 ReaderIMU OBSimu;
+
+Loosely::Loosely(){
+	init_att_unc << 0.3, 0.3, 0.5;
+	init_vel_unc << 10, 10, 10;
+	init_pos_unc << 30, 30, 30;
+}
+
 
 void read_imu(){
 	string line;
@@ -58,7 +85,7 @@ void read_imu(){
 }
 
 // Function
-bool Loosely::isValid(string observation_filepath) {
+/*bool Loosely::isValid(string observation_filepath) {
 	ifstream fin(observation_filepath);
 	if (!fin.good()) {
 		return false;
@@ -129,7 +156,7 @@ void Loosely::epochOutputGPS(ofstream& fout) {
 		<< std::setw(15) << GNSSsol.posXYZ.at(0) << std::setw(15) << GNSSsol.posXYZ.at(1) << std::setw(15) << GNSSsol.posXYZ.at(2)
 		<< std::setw(15) << GNSSsol.velXYZ.at(0) << std::setw(15) << GNSSsol.velXYZ.at(1) << std::setw(15) << GNSSsol.velXYZ.at(2)
 		<< "\n";
-}
+}*/
 
 // A routine to facilitate IMU mechanization in ECEF
 void Loosely::SolutionIMU(ReaderIMU IMU, IMUmechECEF& MechECEF) {
@@ -146,7 +173,7 @@ void Loosely::SolutionIMU(ReaderIMU IMU, IMUmechECEF& MechECEF) {
 }
 
 // A routine to organize GNSS solution from file
-void Loosely::SolutionGNSS(ReaderGNSS GNSS) {
+/*void Loosely::SolutionGNSS(ReaderGNSS GNSS) {
 	// Compute time interval
 	_dT = GNSS._GNSSdata.gpsTime - _epochGNSS;
 	// Update solution
@@ -178,7 +205,7 @@ void Loosely::LooseCoupling(ReaderGNSS &GNSS, IMUmechECEF& Mech) {
 	Mech._gbias = INTsol.dw;
 	// Add heading corrections below for improved results...
 
-}
+}*/
 
 VectorXd double2eigVector(double a, double b, double c){
 	VectorXd v = VectorXd::Zero(3);
@@ -186,6 +213,123 @@ VectorXd double2eigVector(double a, double b, double c){
 	v(1) = b;
 	v(2) = c;
 	return v;
+}
+
+class Earth{
+	public:
+		int Re;
+		double f;
+		double Rp;
+		double e1;
+		double e2;
+		double wie;
+		double g0;
+		double RN;
+		double RM;
+		double Mpv2;
+		double Mpv4;
+		double RNh;
+		double RMh;
+		double tanL;
+		double secL;
+		double sinL;
+		double cosL;
+		double sin2L;
+		double cos2L;
+		MatrixXd wnie;
+		MatrixXd wnen;
+		MatrixXd wnin;
+		double g;
+		MatrixXd gn;
+		MatrixXd wnien;
+		MatrixXd gcc;
+
+};
+
+void att2Cnb(MatrixXd att){
+	MatrixXd sina(1, 3); MatrixXd cosa(1, 3);
+	sina << sin(att(0)), sin(att(1)), sin(att(2));
+	cosa << cos(att(0)), cos(att(1)), cos(att(2));
+	double sinp=sina(1);  double sinr=sina(2); double siny=sina(3);
+	double cosp=cosa(1);  double cosr=cosa(2); double cosy=cosa(3);
+				
+	Cnb << cosr*cosy-sinp*sinr*siny, -cosp*siny,  sinr*cosy+sinp*cosr*siny, cosr*siny+sinp*sinr*cosy, cosp*cosy, sinr*siny-sinp*cosr*cosy, -cosp*sinr, sinp, cosp*cosr;;
+}
+
+void earth_update(MatrixXd pos, MatrixXd vel, Earth& eth){//todo use global variable
+	eth.Re = 6378137;                    
+	eth.f  = 1/298.257223563;            
+	eth.Rp = (1-eth.f)*eth.Re;           
+	eth.e1 = sqrt(pow(eth.Re, 2)-pow(eth.Rp, 2))/eth.Re;
+	eth.e2 = sqrt(pow(eth.Re, 2)-pow(eth.Rp, 2))/eth.Rp; 
+	eth.wie = 7.2921151467e-5;           
+	eth.g0 = 9.7803267714;
+
+	// update earth related parameters
+	double B, L, h;
+	double ve, vn, vu;
+	B = pos(1); L = pos(2); h = pos(3); //ok
+	ve = vel(1); vn = vel(2); vu = vel(3); //ok
+	eth.RN = eth.Re/sqrt(1-pow(eth.e1, 2)*pow(sin(B), 2));           
+	eth.RM = eth.RN*(1-pow(eth.e1, 2))/(1-pow(eth.e1, 2)*pow(sin(B), 2)); 
+	eth.Mpv2 = sec(B)/(eth.RN+h);
+	eth.Mpv4 = 1/(eth.RM+h);
+	eth.RNh  = eth.RN+h;
+	eth.RMh  = eth.RM+h;
+	eth.tanL = tan(B);
+	eth.secL = sec(B);
+	eth.sinL = sin(B);
+	eth.cosL = cos(B);
+	eth.sin2L= sin(2*B);
+	eth.cos2L= cos(2*B);
+
+	//earth rotation rate projected in the n-frame
+	eth.wnie = MatrixXd::Zero(1, 3);
+	eth.wnie << 0, eth.wie*cos(B), eth.wie*sin(B);
+
+	// the rate of n-frame respect to e-fame projected in the n-frame
+	eth.wnen = MatrixXd::Zero(1, 3);
+	eth.wnen << -vn/(eth.RM+h), ve/(eth.RN+h), ve/(eth.RN+h)*tan(B);
+
+	// the rate of n-frame respect to i-fame projected in the n-frame
+	eth.wnin = eth.wnie + eth.wnen;
+
+	// earth gravity vector projected in the n-frame
+	eth.g  = eth.g0*(1+5.27094e-3*pow(sin(B), 2)+2.32718e-5*pow(sin(B), 4))-3.086e-6*h; 
+	eth.gn << 0, 0, -eth.g;
+
+	// gcc:gravitational acceleration/coriolis acceleration/centripetal acceleration
+	eth.wnien = 2*eth.wnie + eth.wnen;
+	eth.gcc = -eth.wnien.cross(vel)+eth.gn;
+}
+
+void Dblh2Dxyz(MatrixXd blh){
+	// Convert perturbation error from n-frame to e-frame
+
+
+	double B = blh(1); double L = blh(2); double H = blh(3);
+	double sinB = sin(B); double cosB = cos(B); double sinL = sin(L); double cosL = cos(L);
+	double N = RE_WGS84/sqrt(1-pow(ECC_WGS84, 2)*pow(sinB, 2)); double NH = N+H;
+	double e2=pow(ECC_WGS84, 2);
+	
+	T << -NH*sinB*cosL, -NH*cosB*sinL, cosB*cosL, -NH*sinB*sinL, NH*cosB*cosL, cosB*sinL, (NH-e2*N)*cosB, 0, sinB;
+
+	//Dxyz = T*Dblh;
+}
+
+
+void blh2xyz(MatrixXd blh){
+	double B = blh(1); double L = blh(2); double H = blh(3);
+	double sinB = sin(B); double cosB = cos(B); double sinL = sin(L); double cosL = cos(L);
+	double N = RE_WGS84/sqrt(1-pow(ECC_WGS84, 2)*pow(sinB, 2));
+	double X = (N+H)*cosB*cosL;
+	double Y = (N+H)*cosB*sinL;
+	double Z = (N*(1-pow(ECC_WGS84, 2))+H)*sinB;
+	xyz << X, Y, Z;
+
+	// transformation matrix from n-frame to e-frame
+	Cen << -sinL, cosL, 0, -sinB*cosL, -sinB*sinL, cosB, cosB*cosL, cosB*sinL, sinB;
+	Cen = Cen.transpose();
 }
 
 void Loosely::get_imu_sol(gnss_sol_t* int_sol){
@@ -198,7 +342,7 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 				MechECEF.InitializeMechECEF(_ECEF_imu, _LLH_o, GNSSsol.velXYZ, iniIMU._RPY, iniIMU._ACCbias, iniIMU._GYRbias);
 
 				imu_ready = 1; //Tells client.c that it can read imu data
-				printf("inizializzazione finita\n");
+				printf("end initialization\n");
 			}
 			read_imu();
 			if(imu_ready){
@@ -231,7 +375,113 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 	(*int_sol).c = IMUsol.posXYZ.at(2);
 
 	//With standard deviation
-	if(fst_pos){ //Use P instead of x
+	if(fst_pos){ //Variance Initialization
+		MatrixXd pos(1, 3);
+		MatrixXd vel(1, 3);
+
+		pos << IMUsol.posXYZ.at(0), IMUsol.posXYZ.at(1), IMUsol.posXYZ.at(2);
+		vel << IMUsol.velXYZ.at(0), IMUsol.velXYZ.at(1), IMUsol.velXYZ.at(2);
+
+		MatrixXd tmp(1, 3);
+		tmp(0, 0) = ecef2geo({pos(0, 0), pos(0, 1), pos(0, 2)}).at(0);
+		tmp(0, 1) = ecef2geo({pos(0, 0), pos(0, 1), pos(0, 2)}).at(1);
+		tmp(0, 2) = ecef2geo({pos(0, 0), pos(0, 1), pos(0, 2)}).at(2);
+		pos = tmp;
+
+		init_att_unc(0) = init_att_unc(0) * D2R;
+		init_att_unc(1) = init_att_unc(1) * D2R;
+		init_att_unc(2) = init_att_unc(2) * D2R;
+
+		init_pos_unc(0) = init_pos_unc(0) * RE_WGS84;
+		init_pos_unc(1) = init_pos_unc(1) * RE_WGS84;
+		init_pos_unc(2) = init_pos_unc(2) * RE_WGS84;
+
+		if (vel(0, 0) < 1e-4){
+			vel(0, 0) = 1e-4;
+		}
+		double yaw = -atan2(vel(0, 0), vel(0, 1));
+		//std::vector<double> att = {0, 0, yaw};
+		MatrixXd att(1, 3);
+		att << 0, 0, yaw;
+
+		MatrixXd avp0(9, 1);
+		avp0 << att(0, 0), att(0, 1), att(0, 2), vel(0, 0), vel(0, 1), vel(0, 2), pos(0, 0), pos(0, 1), pos(0, 2);
+		MatrixXd acc = MatrixXd::Zero(3, 1);
+		att2Cnb(att);
+		//Initialize IMU error
+		MatrixXd bg = MatrixXd::Zero(3, 1);
+		MatrixXd ba = MatrixXd::Zero(3, 1);
+		MatrixXd Kg = MatrixXd::Identity(3, 3);
+		MatrixXd Ka = MatrixXd::Identity(3, 3);
+		MatrixXd tauG(3, 1);
+		tauG << std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity();
+		MatrixXd tauA(3, 1);
+		tauA << std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity();
+
+		//Initialize earth related parameters
+		Earth eth;
+		earth_update(pos,vel, eth); 
+		MatrixXd Mpv(3, 3);
+		Mpv << 0, eth.Mpv4, 0, eth.Mpv2, 0, 0, 0, 0, 1;
+		MatrixXd wib = MatrixXd::Zero(3, 1);
+		MatrixXd fb = MatrixXd::Zero(3, 1);
+		MatrixXd fn = -eth.gn; 					
+		MatrixXd web = MatrixXd::Zero(3, 1);
+
+		MatrixXd mx_init_bg_unc(1, 3);
+		mx_init_bg_unc << init_bg_unc, init_bg_unc, init_bg_unc;
+
+		MatrixXd mx_init_ba_unc(1, 3);
+		mx_init_ba_unc << init_ba_unc, init_ba_unc, init_ba_unc;
+
+		MatrixXd mx_pad_gyro(1, 3);
+		mx_pad_gyro << psd_gyro, psd_gyro, psd_gyro;
+
+		MatrixXd mx_pad_acce(1, 3);
+		mx_pad_acce << psd_acce, psd_acce, psd_acce;
+
+		MatrixXd mx_pad_bg(1, 3);
+		mx_pad_bg << psd_bg, psd_bg, psd_bg;
+
+		MatrixXd mx_pad_ba(1, 3);
+		mx_pad_ba << psd_ba, psd_ba, psd_ba;
+
+		x << att(0, 0), att(0, 1), att(0, 2), vel(0, 0), vel(0, 1), vel(0, 2), pos(0, 0), pos(0, 1), pos(0, 2), bg, ba;
+
+		MatrixXd initP(1, 15);
+		initP << init_att_unc, init_vel_unc, init_pos_unc, mx_init_bg_unc, mx_init_ba_unc;
+		P = initP.array().square().matrix().asDiagonal();
+		
+		MatrixXd initQ(1, 15);
+		initQ << mx_pad_gyro, mx_pad_acce, MatrixXd::Zero(1, 3), mx_pad_bg, mx_pad_ba;
+		Q = initQ.array().matrix().asDiagonal() * nt;
+
+		blh2xyz(pos);
+
+		Dblh2Dxyz(pos);
+		
+		MatrixXd posvar(3, 3);
+		MatrixXd initPosvar(1, 3);
+		initPosvar << x(0, 6), x(0, 7), x(0, 8);
+		posvar = initPosvar.array().matrix().asDiagonal(); //blh variance
+
+		posvar = T * posvar * T.transpose(); //xyz variance
+
+		//variance
+		MatrixXd va(1, 3);
+		va << posvar(0, 0), posvar(1, 1), posvar(2, 2);
+
+		for(int i = 0; i < 6; i++){
+			if(va(0, i) < 0)
+				va(0, i) = -sqrt(fabs(va(0, i)));
+			else
+				va(0, i) = sqrt(va(0, i));
+		}
+
+		fst_pos = 0;
+		//Debug print
+		printf("%lf %lf %lf", va(0, 0), va(0, 1), va(0, 2));
+	}else{
 
 	}
 
@@ -262,18 +512,9 @@ void Loosely::init_imu(gnss_sol_t fst_pos){
 	IMU_INI_TIME_END = _epochIMU+10; // Time taken to initialize the imu  (first imu epoch + 300) (for example)
 }
 
-Loosely::Loosely(){
-	Eigen::Matrix< double, 11, 1> initP;
-	initP << pow(0.3, 2), pow(0.3, 2), pow(0.5, 2), pow(10, 2), pow(10, 2), pow(10, 2), pow(30, 2), pow(30, 2), pow(30, 2), pow(init_bg_unc, 2), pow(init_ba_unc, 2);
-	
-	P = initP.array().square().matrix().asDiagonal();
-	xa.Zero();
-	Pa.Zero();
-}
-
 // Facilitates the GNSS-IMU Loose integration process
-Loosely::Loosely(gnss_sol_t fst_pos){
-	/*//Inizializzazione IMU
+/*Loosely::Loosely(gnss_sol_t fst_pos){
+	//Inizializzazione IMU
 	ReaderGNSS OBSgnss;
 	ReaderIMU OBSimu;
 
@@ -331,8 +572,8 @@ Loosely::Loosely(gnss_sol_t fst_pos){
 			// Process Epoch
 			SolutionGNSS(OBSgnss);							//This has effects on: _epochGNSS, GNSSsol
 		}	
-		*/	
-}
+			
+}*/
 
 
 /*Loosely::Loosely(std::string filePathGNSS, std::string filePathIMU, std::string filePathOUT) {
