@@ -28,20 +28,16 @@
 #define THRESHOLD 0.2
 
 //Solutions
-/*gnss_sol_t gps;
-gnss_sol_t galileo;*/
 
 gnss_sol_t sol[3]; /* GPS=0, GALILEO=1, IMU=2 */
 gnss_sol_t best;
 
+FILE* sol_file[3];
 
-//Integrated solutions
-/*gnss_sol_t gps_imu;
-gnss_sol_t galileo_imu;*/
+
 
 FILE *file;
-//int instance_no[2] = {0, 1};
-//pthread_t id[3];
+
 pid_t str2str_pid, rtkrcv1_pid, rtkrcv2_pid;
 
 int isset_first_pos;
@@ -54,6 +50,7 @@ int seconds;
 
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
 
 
 //Close SEMOR and all processes started by it (rtkrcv and str2str)
@@ -72,6 +69,10 @@ void close_semor(int status){
     printf("\nSEMOR terminated.\n");
     exit(status);
 }
+
+/*LocData_t get_data(){
+
+}*/
 
 gnss_sol_t str2gnss(char str[MAXSTR]){
     gnss_sol_t gnss;
@@ -140,30 +141,37 @@ void print_solutions(){
     fflush(file);
 }
 
+void print_solution(int sol_index){
+    char sol1[MAXSTR];
+    gnss2str(sol1, sol[sol_index]);
+    fprintf(sol_file[sol_index], "%s\n", (sol[sol_index].time.week == 0) ? "no data" : sol1);
+    fflush(file);
+}
+
 int read_gnss(int fd, int* offset, char buf[MAXSTR]){
     int nbytes = 0;
 
-    //TODO: quando smetto di usare file e riprendo i socket, devo decommentare questa parte e commentare la lettura da file
-    /*if ((nbytes = recv(fd, buf + *offset, (sizeof buf)-*offset, 0)) < 0) {
-        if(errno != EAGAIN){
-            perror("read");
-            close_semor(1);
+    if(debug){
+        do{
+            nbytes = read(fd, buf+*offset, 1);
+            if(nbytes == -1){
+                perror("SEMOR read socket");
+                close_semor(1);
+            }else if(nbytes == 0){ // Rtkrcv1 is down
+                printf("nothing to read\n"); //debug
+                continue;
+            }
+            (*offset)++;
+        }while(buf[(*offset)-1] != '\r' && buf[(*offset)-1] != '\n');
+    }else{
+        if ((nbytes = recv(fd, buf + *offset, (sizeof buf)-*offset, 0)) < 0) {
+            if(errno != EAGAIN){
+                perror("read");
+                close_semor(1);
+            }
         }
+        *offset = *offset+nbytes;
     }
-    *offset = *offset+nbytes;
-    */
-
-    do{
-        nbytes = read(fd, buf+*offset, 1);
-        if(nbytes == -1){
-            perror("SEMOR read socket");
-            close_semor(1);
-        }else if(nbytes == 0){ // Rtkrcv1 is down
-            printf("nothing to read\n"); //debug
-            continue;
-        }
-        (*offset)++;
-    }while(buf[(*offset)-1] != '\r' && buf[(*offset)-1] != '\n');
 
     return nbytes;
 }
@@ -267,7 +275,7 @@ void process_solutions(int* check_sols){
     int best_found = 1;
     int best_idx = -1; //0: gps, 1:galileo, 2:imu, 3:best
 
-    if(DEBUG_FILE){
+    if(debug){
         for(i = 0; i < 2; i++){ //for each gnss solution check if its epoch is higher than the "seconds" variable, if so wait next iterations 
         //before displaying the solution till epochs are equal
             if(sol[i].time.sec > seconds){
@@ -322,6 +330,12 @@ void process_solutions(int* check_sols){
         best_idx = -1;
 
     //Here we have the best position
+    if(logs){
+        print_solution(GPS);
+        print_solution(GALILEO);
+        print_solution(IMU);
+    }
+
     print_solutions();
     //So let's generate the next imu position
     if(best_idx != -1){ //se c'è una soluzione migliore:
@@ -386,7 +400,7 @@ void handle_connection(){
         for(i = 0; i < 2; i++){ //Get GPS and GALILEO solutions
         usleep(150000); //gives time to the solutions to be read (if one of them is late)
             if(fds[i].revents & POLLIN){
-                if(DEBUG_FILE && wait_read[i]){ //Don't read solution i (0:GPS, 1:GALILEO) if the solution in the previous iterations has a higher epoch than "seconds" variable
+                if(debug && wait_read[i]){ //Don't read solution i (0:GPS, 1:GALILEO) if the solution in the previous iterations has a higher epoch than "seconds" variable
                     continue;
                 }
                 read_gnss(socketfd[i], &offset[i], buf[i]);
@@ -405,7 +419,7 @@ void handle_connection(){
             }
         }
 
-        if(DEBUG_FILE){
+        if(debug){
             if(seconds == 0){
                 seconds = (sol[GPS].time.sec <= sol[GALILEO].time.sec) ? sol[GPS].time.sec : sol[GALILEO].time.sec; //Set current second to the minimum of the epochs of the 2 gnss solution
             }
@@ -413,7 +427,7 @@ void handle_connection(){
 
         process_solutions(&check_sols); //Get best solution, output it and use it to calculate next imu position
 
-        if(DEBUG_FILE)
+        if(debug)
             seconds++; //Update current second
     }
 
@@ -422,6 +436,17 @@ void handle_connection(){
 
 void start_processing(void){
     int ret;
+    int i;
+    char path[PATH_MAX];
+
+    sprintf(path, "%sgps.log", root_path);
+    sol_file[GPS] = fopen(path, "w");
+
+    sprintf(path, "%sgalileo.log", root_path);
+    sol_file[GALILEO] = fopen(path, "w");
+
+    sprintf(path, "%simu.log", root_path);
+    sol_file[IMU] = fopen(path, "w");
 
     file = fopen(FILE_PATH, "w");
     if(file == NULL){

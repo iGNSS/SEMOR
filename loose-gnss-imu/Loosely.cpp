@@ -16,39 +16,117 @@ using namespace Eigen;
 const double PI = 3.1415926535898;
 
 //Variance
-MatrixXd x(1, 15);
+VectorXd x(15);
 MatrixXd P(15, 15);
 MatrixXd Q(15, 15);
 MatrixXd v;
 MatrixXd R;
 MatrixXd H;
 //Dblh2Dxyz
-MatrixXd T;
+Matrix3d T;
 MatrixXd Dxyz;
 //blh2xyz
-MatrixXd Cen(3, 3);
-MatrixXd xyz(1, 3);
+Matrix3d Cen;
+Vector3d xyz;
 
-MatrixXd Cnb(3, 3);
+Matrix3d Cnb;
 
-Matrix<double, 1, 15> xa;
+Matrix<double, 15, 1> xa;
 Matrix<double, 15, 15> Pa;
-MatrixXd init_att_unc(1, 3);
-MatrixXd init_vel_unc(1, 3);
-MatrixXd init_pos_unc(1, 3);
-double init_bg_unc = 4.8481367284e-05;
-double init_ba_unc = 0.048901633857000000;
-double psd_gyro  = 3.38802348178723e-09;
-double psd_acce      =     2.60420170553977e-06;     // acce noise PSD (m^2/s^3)  
-double psd_bg        =     2.61160339323310e-14;     // gyro bias random walk PSD (rad^2/s^3)
-double psd_ba        =     1.66067346797506e-09;
-const int sample_rate = 104;
-const int nt=1/sample_rate;
+Vector3d init_att_unc;
+Vector3d init_vel_unc;
+Vector3d init_pos_unc;
+const double nt=1/sample_rate;
 const double D2R = PI/180.0;
 const double RE_WGS84 = 6378137.0;
 const double FE_WGS84    =(1.0/298.257223563); //earth flattening (WGS84)
 const double ECC_WGS84   =sqrt(2*FE_WGS84-pow(FE_WGS84, 2)); 
 int fst_pos = 1;
+
+class Earth{
+	public:
+		double Re;
+		double f;
+		double Rp;
+		double e1;
+		double e2;
+		double wie;
+		double g0;
+		double RN;
+		double RM;
+		double Mpv2;
+		double Mpv4;
+		double RNh;
+		double RMh;
+		double tanL;
+		double secL;
+		double sinL;
+		double cosL;
+		double sin2L;
+		double cos2L;
+		Vector3d wnie;
+		Vector3d wnen;
+		Vector3d wnin;
+		double g;
+		Vector3d gn;
+		Vector3d wnien;
+		Vector3d gcc;
+
+};
+
+Vector3d pos;
+Vector3d vel;
+double yaw;
+Vector3d att;
+MatrixXd avp0(9, 1);
+Vector3d acc;
+Vector3d bg;
+Vector3d ba;
+Matrix3d Kg;
+Matrix3d Ka;
+Vector3d tauG;
+Vector3d tauA;
+Earth eth;
+Matrix3d Mpv;
+Vector3d wib;
+Vector3d fb;
+MatrixXd fn; 					
+Vector3d web;
+Vector3d mx_init_bg_unc;
+Vector3d mx_init_ba_unc;
+Vector3d mx_pad_gyro;
+Vector3d mx_pad_acce;
+Vector3d mx_pad_bg;
+Vector3d mx_pad_ba;
+VectorXd initP(15);
+VectorXd initQ(15);
+Matrix3d posvar;
+Vector3d initPosvar;
+Vector3d va;
+MatrixXd dv0(3, 1);
+MatrixXd dw0(3, 1);
+MatrixXd dv(3, 1);
+MatrixXd dw(3, 1);
+Vector3d pos_mid;
+Vector3d vel_mid;
+MatrixXd Q0(15, 15);
+MatrixXd P0(15, 15);
+Vector3d pos_new;
+Vector3d vel_new;
+MatrixXd old_dv(3, 1);
+MatrixXd old_dw(3, 1);
+MatrixXd dv_rot(3, 1);
+MatrixXd dv_scul(3, 1);
+Matrix3d dv_sf;
+Vector3d dv_cor;
+MatrixXd dw_cone(3, 1);
+MatrixXd phi_b_ib(3, 1);
+MatrixXd phi_n_in(3, 1);
+Matrix3d Cbb;
+Matrix3d Cnn;
+Matrix3d Cnb_new;
+Vector3d att_new;
+
 
 
 IMUmechECEF MechECEF; 
@@ -215,48 +293,79 @@ VectorXd double2eigVector(double a, double b, double c){
 	return v;
 }
 
-class Earth{
-	public:
-		int Re;
-		double f;
-		double Rp;
-		double e1;
-		double e2;
-		double wie;
-		double g0;
-		double RN;
-		double RM;
-		double Mpv2;
-		double Mpv4;
-		double RNh;
-		double RMh;
-		double tanL;
-		double secL;
-		double sinL;
-		double cosL;
-		double sin2L;
-		double cos2L;
-		MatrixXd wnie;
-		MatrixXd wnen;
-		MatrixXd wnin;
-		double g;
-		MatrixXd gn;
-		MatrixXd wnien;
-		MatrixXd gcc;
-
-};
-
-void att2Cnb(MatrixXd att){
-	MatrixXd sina(1, 3); MatrixXd cosa(1, 3);
+void att2Cnb(Vector3d att){
+	Vector3d sina; Vector3d cosa;
 	sina << sin(att(0)), sin(att(1)), sin(att(2));
 	cosa << cos(att(0)), cos(att(1)), cos(att(2));
-	double sinp=sina(1);  double sinr=sina(2); double siny=sina(3);
-	double cosp=cosa(1);  double cosr=cosa(2); double cosy=cosa(3);
+	double sinp=sina(0);  double sinr=sina(1); double siny=sina(2);
+	double cosp=cosa(0);  double cosr=cosa(1); double cosy=cosa(2);
 				
 	Cnb << cosr*cosy-sinp*sinr*siny, -cosp*siny,  sinr*cosy+sinp*cosr*siny, cosr*siny+sinp*sinr*cosy, cosp*cosy, sinr*siny-sinp*cosr*cosy, -cosp*sinr, sinp, cosp*cosr;;
 }
 
-void earth_update(MatrixXd pos, MatrixXd vel, Earth& eth){//todo use global variable
+/*Vector3d Cnb2att(Matrix3d Cnb){
+	Vector3d att;
+	att << asin(Cnb(2,1)), atan2(-Cnb(2,0),Cnb(2,2)), atan2(-Cnb(0,1),Cnb(1,1));
+}
+
+Matrix3d askew(Matrix<double, 3, 1> vector){
+	Matrix3d matrix;
+	matrix << 0, -vector(2, 0), vector(1, 0), vector(2, 0), 0, -vector(0, 0), -vector(1, 0), vector(0, 0), 0;
+	return matrix;
+}
+
+Matrix3d rvec2mat(Matrix<double, 3, 1> vec){
+	double theta=sqrt(vec.transpose()*vec);
+	return Matrix3d::Identity()+(sin(theta)/theta*askew(vec))+((1-cos(theta))/pow(theta, 2)*(askew(vec).array().square().matrix()));
+}
+
+MatrixXd update_trans_mat(Earth eth, Vector3d vel, MatrixXd fn, Vector3d tauA, Vector3d tauG, double nt, Matrix3d Cnb, Matrix3d Mpv){
+	
+	Matrix3d zero33 = Matrix3d::Zero();
+	double tanL = eth.tanL;   double secL = eth.secL;
+	double sin2L= eth.sin2L;  double cos2L= eth.cos2L;
+	double RNh  = eth.RNh;    double RMh  = eth.RMh;
+	double vE   = vel(0);     double vN   = vel(1);  double vU   = vel(2);
+
+	Matrix3d F1=zero33; F1(0, 1)=-eth.wnie(2); F1(0, 2)=eth.wnie(1);
+
+	Matrix3d F2=zero33; F2(0, 1)=1/RNh; F2(0, 2)=tanL/RNh; F2(1, 0)=-1/RMh;
+
+	Matrix3d F3=zero33; F3(0, 2)=vE*pow(secL, 2)/RNh; F3(2, 0)=vN/pow(RMh, 2); F3(2, 1)=-vE/pow(RNh, 2); F3(2, 2)=-vE*tanL/pow(RNh, 2);
+
+	double x = -eth.g0*sin2L*(5.27094e-3-4*2.32718e-5*cos2L); 
+	Matrix3d F4=zero33; F4(0, 2)=x; F4(2, 2)=3.086e-6;
+
+	// transition matrix for phi
+	Matrix3d Faa = -askew(eth.wnin);     
+	Matrix3d Fav = F2;
+	Matrix3d Fap = F1+F3;
+		
+	// transition matrix for delta-vel
+	Matrix3d Fva = askew(fn);
+	Matrix3d Fvv = askew(vel)*F2 - askew(eth.wnien);
+	Matrix3d Fvp = askew(vel)*(2*F1+F3+F4);
+
+	// transition matrix for delta-pos
+	Matrix3d Fpp = zero33; Fpp(0, 1)=vE*secL*tanL/RNh; Fpp(2, 1)=-vN/pow(RMh, 2); Fpp(2, 2)= -vE*secL/pow(RNh, 2);
+	Matrix3d Fpv = Mpv;    
+		
+	// time continuous state transition matrix
+	Matrix<double, 15, 15> Ft;
+	Ft << Faa       Fav       Fap      -Cnb            zero33
+		Fva       Fvv       Fvp      zero33              Cnb
+		zero33    Fpv       Fpp      zero33              zero33
+		zero33    zero33    zero33   diag(-1./tauG)  zero33
+		zero33    zero33    zero33   zero33              diag(-1./tauA);      
+
+	// discretization
+	if(nt>0.1)
+		return (Ft*nt).exp(); 
+	else
+		return MatrixXd::Identity(size(Ft))+Ft*nt;
+}*/
+
+void earth_update(Vector3d pos, Vector3d vel){
 	eth.Re = 6378137;                    
 	eth.f  = 1/298.257223563;            
 	eth.Rp = (1-eth.f)*eth.Re;           
@@ -268,8 +377,8 @@ void earth_update(MatrixXd pos, MatrixXd vel, Earth& eth){//todo use global vari
 	// update earth related parameters
 	double B, L, h;
 	double ve, vn, vu;
-	B = pos(1); L = pos(2); h = pos(3); //ok
-	ve = vel(1); vn = vel(2); vu = vel(3); //ok
+	B = pos(0); L = pos(1); h = pos(2); //ok
+	ve = vel(0); vn = vel(1); vu = vel(2); //ok
 	eth.RN = eth.Re/sqrt(1-pow(eth.e1, 2)*pow(sin(B), 2));           
 	eth.RM = eth.RN*(1-pow(eth.e1, 2))/(1-pow(eth.e1, 2)*pow(sin(B), 2)); 
 	eth.Mpv2 = sec(B)/(eth.RN+h);
@@ -284,11 +393,11 @@ void earth_update(MatrixXd pos, MatrixXd vel, Earth& eth){//todo use global vari
 	eth.cos2L= cos(2*B);
 
 	//earth rotation rate projected in the n-frame
-	eth.wnie = MatrixXd::Zero(1, 3);
+	eth.wnie = Vector3d::Zero();
 	eth.wnie << 0, eth.wie*cos(B), eth.wie*sin(B);
 
 	// the rate of n-frame respect to e-fame projected in the n-frame
-	eth.wnen = MatrixXd::Zero(1, 3);
+	eth.wnen = Vector3d::Zero();
 	eth.wnen << -vn/(eth.RM+h), ve/(eth.RN+h), ve/(eth.RN+h)*tan(B);
 
 	// the rate of n-frame respect to i-fame projected in the n-frame
@@ -303,11 +412,11 @@ void earth_update(MatrixXd pos, MatrixXd vel, Earth& eth){//todo use global vari
 	eth.gcc = -eth.wnien.cross(vel)+eth.gn;
 }
 
-void Dblh2Dxyz(MatrixXd blh){
+void Dblh2Dxyz(Vector3d blh){
 	// Convert perturbation error from n-frame to e-frame
 
 
-	double B = blh(1); double L = blh(2); double H = blh(3);
+	double B = blh(0); double L = blh(1); double H = blh(2);
 	double sinB = sin(B); double cosB = cos(B); double sinL = sin(L); double cosL = cos(L);
 	double N = RE_WGS84/sqrt(1-pow(ECC_WGS84, 2)*pow(sinB, 2)); double NH = N+H;
 	double e2=pow(ECC_WGS84, 2);
@@ -318,18 +427,17 @@ void Dblh2Dxyz(MatrixXd blh){
 }
 
 
-void blh2xyz(MatrixXd blh){
-	double B = blh(1); double L = blh(2); double H = blh(3);
+void blh2xyz(Vector3d blh){
+	double B = blh(0); double L = blh(1); double H = blh(2);
 	double sinB = sin(B); double cosB = cos(B); double sinL = sin(L); double cosL = cos(L);
 	double N = RE_WGS84/sqrt(1-pow(ECC_WGS84, 2)*pow(sinB, 2));
 	double X = (N+H)*cosB*cosL;
 	double Y = (N+H)*cosB*sinL;
 	double Z = (N*(1-pow(ECC_WGS84, 2))+H)*sinB;
 	xyz << X, Y, Z;
-
 	// transformation matrix from n-frame to e-frame
 	Cen << -sinL, cosL, 0, -sinB*cosL, -sinB*sinL, cosB, cosB*cosL, cosB*sinL, sinB;
-	Cen = Cen.transpose();
+	Cen.transposeInPlace();
 }
 
 void Loosely::get_imu_sol(gnss_sol_t* int_sol){
@@ -342,7 +450,6 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 				MechECEF.InitializeMechECEF(_ECEF_imu, _LLH_o, GNSSsol.velXYZ, iniIMU._RPY, iniIMU._ACCbias, iniIMU._GYRbias);
 
 				imu_ready = 1; //Tells client.c that it can read imu data
-				printf("end initialization\n");
 			}
 			read_imu();
 			if(imu_ready){
@@ -376,113 +483,197 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 
 	//With standard deviation
 	if(fst_pos){ //Variance Initialization
-		MatrixXd pos(1, 3);
-		MatrixXd vel(1, 3);
 
 		pos << IMUsol.posXYZ.at(0), IMUsol.posXYZ.at(1), IMUsol.posXYZ.at(2);
 		vel << IMUsol.velXYZ.at(0), IMUsol.velXYZ.at(1), IMUsol.velXYZ.at(2);
 
-		MatrixXd tmp(1, 3);
-		tmp(0, 0) = ecef2geo({pos(0, 0), pos(0, 1), pos(0, 2)}).at(0);
-		tmp(0, 1) = ecef2geo({pos(0, 0), pos(0, 1), pos(0, 2)}).at(1);
-		tmp(0, 2) = ecef2geo({pos(0, 0), pos(0, 1), pos(0, 2)}).at(2);
+		Vector3d tmp;
+		std::vector<double> geostdpos = ecef2geo(eigVector2std(pos));
+		tmp(0) = geostdpos.at(0);
+		tmp(1) = geostdpos.at(1);
+		tmp(2) = geostdpos.at(2);
 		pos = tmp;
 
+		//togliere start
+		pos << -2408691.0460, 4698107.9065, 3566697.8630;
+		//pos << 34.04173, 117.14394, 6365076123.9;
+
+		geostdpos = ecef2geo(eigVector2std(pos));
+		tmp(0) = geostdpos.at(0);
+		tmp(1) = geostdpos.at(1);
+		tmp(2) = geostdpos.at(2);
+		pos = tmp;
+		//togliere end
+
+		//pos << 0.597256716722096, 2.044547372093737, 35.064853186719120;
+		//vel << -1.723511926180124, -0.216003377465377, 0.024235396676032;
+		vel << 1.46913, 0.91224, -0.16498;
 		init_att_unc(0) = init_att_unc(0) * D2R;
 		init_att_unc(1) = init_att_unc(1) * D2R;
 		init_att_unc(2) = init_att_unc(2) * D2R;
 
-		init_pos_unc(0) = init_pos_unc(0) * RE_WGS84;
-		init_pos_unc(1) = init_pos_unc(1) * RE_WGS84;
-		init_pos_unc(2) = init_pos_unc(2) * RE_WGS84;
+		init_pos_unc(0) = init_pos_unc(0) / RE_WGS84;
+		init_pos_unc(1) = init_pos_unc(1) / RE_WGS84;
+		init_pos_unc(2) = init_pos_unc(2);
 
-		if (vel(0, 0) < 1e-4){
-			vel(0, 0) = 1e-4;
+
+
+		if (vel(0) < 1e-4){
+			vel(0) = 1e-4;
 		}
-		double yaw = -atan2(vel(0, 0), vel(0, 1));
-		//std::vector<double> att = {0, 0, yaw};
-		MatrixXd att(1, 3);
+		yaw = -atan2(vel(0), vel(1));
+
 		att << 0, 0, yaw;
 
-		MatrixXd avp0(9, 1);
-		avp0 << att(0, 0), att(0, 1), att(0, 2), vel(0, 0), vel(0, 1), vel(0, 2), pos(0, 0), pos(0, 1), pos(0, 2);
-		MatrixXd acc = MatrixXd::Zero(3, 1);
+		avp0 << att, vel, pos;
+		acc = Vector3d::Zero();
 		att2Cnb(att);
 		//Initialize IMU error
-		MatrixXd bg = MatrixXd::Zero(3, 1);
-		MatrixXd ba = MatrixXd::Zero(3, 1);
-		MatrixXd Kg = MatrixXd::Identity(3, 3);
-		MatrixXd Ka = MatrixXd::Identity(3, 3);
-		MatrixXd tauG(3, 1);
+		bg = Vector3d::Zero();
+		ba = Vector3d::Zero();
+		Kg = Matrix3d::Identity();
+		Ka = Matrix3d::Identity();
 		tauG << std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity();
-		MatrixXd tauA(3, 1);
 		tauA << std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity();
 
 		//Initialize earth related parameters
-		Earth eth;
-		earth_update(pos,vel, eth); 
-		MatrixXd Mpv(3, 3);
+		earth_update(pos, vel); 
 		Mpv << 0, eth.Mpv4, 0, eth.Mpv2, 0, 0, 0, 0, 1;
-		MatrixXd wib = MatrixXd::Zero(3, 1);
-		MatrixXd fb = MatrixXd::Zero(3, 1);
-		MatrixXd fn = -eth.gn; 					
-		MatrixXd web = MatrixXd::Zero(3, 1);
+		wib = Vector3d::Zero(3);
+		fb = Vector3d::Zero(3);
+		fn = -eth.gn; 					
+		web = Vector3d::Zero(3);
 
-		MatrixXd mx_init_bg_unc(1, 3);
 		mx_init_bg_unc << init_bg_unc, init_bg_unc, init_bg_unc;
 
-		MatrixXd mx_init_ba_unc(1, 3);
 		mx_init_ba_unc << init_ba_unc, init_ba_unc, init_ba_unc;
 
-		MatrixXd mx_pad_gyro(1, 3);
 		mx_pad_gyro << psd_gyro, psd_gyro, psd_gyro;
 
-		MatrixXd mx_pad_acce(1, 3);
 		mx_pad_acce << psd_acce, psd_acce, psd_acce;
 
-		MatrixXd mx_pad_bg(1, 3);
 		mx_pad_bg << psd_bg, psd_bg, psd_bg;
 
-		MatrixXd mx_pad_ba(1, 3);
 		mx_pad_ba << psd_ba, psd_ba, psd_ba;
 
-		x << att(0, 0), att(0, 1), att(0, 2), vel(0, 0), vel(0, 1), vel(0, 2), pos(0, 0), pos(0, 1), pos(0, 2), bg, ba;
+		x << att, vel, pos, bg, ba;
 
-		MatrixXd initP(1, 15);
 		initP << init_att_unc, init_vel_unc, init_pos_unc, mx_init_bg_unc, mx_init_ba_unc;
 		P = initP.array().square().matrix().asDiagonal();
 		
-		MatrixXd initQ(1, 15);
-		initQ << mx_pad_gyro, mx_pad_acce, MatrixXd::Zero(1, 3), mx_pad_bg, mx_pad_ba;
+		initQ << mx_pad_gyro, mx_pad_acce, Vector3d::Zero(3), mx_pad_bg, mx_pad_ba;
 		Q = initQ.array().matrix().asDiagonal() * nt;
 
 		blh2xyz(pos);
 
 		Dblh2Dxyz(pos);
 		
-		MatrixXd posvar(3, 3);
-		MatrixXd initPosvar(1, 3);
-		initPosvar << x(0, 6), x(0, 7), x(0, 8);
+		initPosvar << P(6, 6), P(7, 7), P(8, 8);
 		posvar = initPosvar.array().matrix().asDiagonal(); //blh variance
 
 		posvar = T * posvar * T.transpose(); //xyz variance
 
 		//variance
-		MatrixXd va(1, 3);
 		va << posvar(0, 0), posvar(1, 1), posvar(2, 2);
+		//printf("BB: %lf\n", posvar(0, 0));
 
-		for(int i = 0; i < 6; i++){
-			if(va(0, i) < 0)
-				va(0, i) = -sqrt(fabs(va(0, i)));
+		for(int i = 0; i < 3; i++){
+			if(va(i) < 0)
+				va(i) = -sqrt(-va(i));
 			else
-				va(0, i) = sqrt(va(0, i));
+				va(i) = sqrt(va(i));
 		}
 
 		fst_pos = 0;
 		//Debug print
-		printf("%lf %lf %lf", va(0, 0), va(0, 1), va(0, 2));
+		//printf("AA: %lf %lf %lf\n", va(0), va(1), va(2));
+		(*int_sol).sda = va(0);
+		(*int_sol).sdb = va(1);
+		(*int_sol).sdc = va(2);
 	}else{
+		/*Vector3d oldpos = pos;
+		dv0 << -0.791625976562500, 0.177917480468750, 9.638977050781250;
+		dw0 << -0.004286024305556, -0.024490017361111, 0.126399739583333;
+		dw = Kg*dw0-bg*nt;
+		dv = Ka*dv0-ba*nt;
 
+		// extrapolate velocity and position
+		vel_mid = vel+ acc*(nt/2);                    
+		pos_mid = pos+ Mpv*(vel+vel_mid)/2*nt; 
+
+		// update the earth related parameters
+		earth_update(pos_mid,vel_mid);
+		wib = dw/nt;
+		fb  = dv/nt;
+		fn  = Cnb*fb;
+		web = wib-Cnb.transpose()*eth.wnie;
+
+		// update velocity 
+		dv_rot  = 0.5*dw0.cross(dv0);
+		dv_scul = 1/12*(old_dw.cross(dv0)+old_dv.cross(dw0));
+		dv_sf   = (Matrix3d::Identity()-0.5*nt*askew(eth.wnin))*Cnb*dv + Cnb*(dv_rot+dv_scul);
+		dv_cor  = eth.gcc*nt;
+		vel_new = vel+dv_sf+dv_cor;
+
+		// update position 
+		Mpv(0, 1) = eth.Mpv2;
+		Mpv(1, 0) = eth.Mpv4;
+		pos_new = pos + Mpv*(vel+vel_new)/2*nt;
+
+		// update attitude 
+		dw_cone  = 1/12*old_dw.cross(dw0);
+		phi_b_ib = dw+dw_cone;
+		phi_n_in = eth.wnin*nt;
+		Matrix3d result;
+		Cbb = rvec2mat(phi_b_ib).transpose();
+		Cnn = rvec2mat(phi_n_in).transpose();
+		Cnb_new = Cnn*Cnb*Cbb;
+		att_new = Cnb2att(Cnb_new);
+
+		// update INS result
+		Cnb = Cnb_new;
+		att = att_new;
+		vel = vel_new;
+		pos = pos_new;
+		x << att, vel, pos, bg, ba;
+
+		old_dw=dw0;
+		old_dv=dv0;
+
+		MatrixXd Phi = update_trans_mat(eth,vel,fn,tauA,tauG,nt,Cnb,Mpv);
+
+		MatrixXd G = MatrixXd::Zero(15,15);
+		//G(1:3,1:3)=-Cnb;
+		for(int i=0; i < 3; i++){
+			for(int j=0; j < 3; j++){
+				G(i, j) = -Cnb(i, j);
+			}
+		}
+		//G(4:6,4:6)= Cnb;
+		for(int i=0; i < 3; i++){
+			for(int j=0; j < 3; j++){
+				G(i+3, j+3) = Cnb(i, j);
+			}
+		}
+		Matrix3d id = Matrix3d::Identity();
+		//G(10:12,10:12)=Matrix3d::Identity();
+		for(int i=0; i < 3; i++){
+			for(int j=0; j < 3; j++){
+				G(i+9, j+9) = id(i, j);
+			}
+		}
+		//G(13:15,13:15)=Matrix3d::Identity();
+		for(int i=0; i < 3; i++){
+			for(int j=0; j < 3; j++){
+				G(i+12, j+12) = id(i, j);
+			}
+		}
+
+		Q0=G*Q*G.transpose();
+		P0=P+0.5*Q0;
+		P=Phi*P0*Phi.transpose()+0.5*Q0;
+
+		*/
 	}
 
 	//Mark imu solution as usable for the comparison (in order to get the best solution for SEMOR)
@@ -491,7 +682,7 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 
 void Loosely::init_imu(gnss_sol_t fst_pos){
 	FileIO FIO;
-	FIO.fileSafeIn("tokyo_imu.csv", fimu);
+	FIO.fileSafeIn("test/tokyo_imu.csv", fimu);
 
 	OBSgnss.readEpoch(fst_pos);
 	read_imu(); //fill OBSimu

@@ -2,6 +2,8 @@
 #define SEMOR_H
 
 #include <unistd.h>
+#include <stdint.h>
+#include <limits.h>
 
 /*
 #ifdef __cplusplus
@@ -16,9 +18,37 @@
 #define IMU_DATA_LAST_N_SEC 2
 #define IMU_HZ 100
 
+extern char root_path[PATH_MAX-200];
+
+extern int logs;
+extern int debug;
+extern double init_bg_unc; //START
+extern double init_ba_unc;
+extern double psd_gyro;
+extern double psd_acce;     // acce noise PSD (m^2/s^3)  
+extern double psd_bg;     // gyro bias random walk PSD (rad^2/s^3)
+extern double psd_ba;
+extern int sample_rate; //END
+
 extern pid_t str2str_pid, rtkrcv1_pid, rtkrcv2_pid;
 
 //extern char imu_data[IMU_DATA_LAST_N_SEC * IMU_HZ][75]; /* Last 2 seconds of imu data (imu send data at 100Hz and it's a string of about 75 chars)*/
+
+typedef struct {
+    double dLon;
+    double dLat;
+    double dAcc;
+    double dGyro;
+    double dHeigth;
+    double dSdn;
+    double dSde;
+    double dSdu;
+    double dRobInd;
+    uint8_t ui8FixQual;
+    uint8_t ui8TS[50+1]; //+1 \0
+}LocData_t;
+
+extern LocData_t get_data();
 
 typedef struct tow{ /* Time Of Week */
     int week;
@@ -51,6 +81,7 @@ typedef struct gnss_solution{ /* a = x | n ,    b = y | e ,     c = z | u*/
 extern int isset_first_pos;
 extern gnss_sol_t first_pos;
 extern int imu_ready;
+extern gnss_sol_t best;
 
 
 //Functions

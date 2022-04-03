@@ -1,9 +1,9 @@
-output.txt
-pids.txt
-prova.txt
+*.txt
+*.log
 test1.pos
 test2.pos
 rtkrcv.nav
 bin/*.o
 build/*
 prove/*
+semor.conf
