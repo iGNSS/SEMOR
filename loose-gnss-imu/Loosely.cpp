@@ -677,7 +677,8 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 	}
 
 	//Mark imu solution as usable for the comparison (in order to get the best solution for SEMOR)
-	(*int_sol).time.week = 0;
+	(*int_sol).time.week = 1;
+	printf("a\n");
 }
 
 void Loosely::init_imu(gnss_sol_t fst_pos){
@@ -700,7 +701,7 @@ void Loosely::init_imu(gnss_sol_t fst_pos){
 	// Initial Position in Geodetic and ENU
 	_LLH_o = ecef2geo(_ECEF_o);	
 
-	IMU_INI_TIME_END = _epochIMU+10; // Time taken to initialize the imu  (first imu epoch + 300) (for example)
+	IMU_INI_TIME_END = _epochIMU+imu_init_epochs; // Time taken to initialize the imu  (first imu epoch + 300) (for example)
 }
 
 // Facilitates the GNSS-IMU Loose integration process

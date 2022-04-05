@@ -17,6 +17,7 @@
 #define PORT2 "8091" /* rtkrcv2 */
 #define IMU_DATA_LAST_N_SEC 2
 #define IMU_HZ 100
+#define LEAP_SECONDS 18
 
 extern char root_path[PATH_MAX-200];
 
@@ -29,6 +30,7 @@ extern double psd_acce;     // acce noise PSD (m^2/s^3)
 extern double psd_bg;     // gyro bias random walk PSD (rad^2/s^3)
 extern double psd_ba;
 extern int sample_rate; //END
+extern int imu_init_epochs;//in seconds
 
 extern pid_t str2str_pid, rtkrcv1_pid, rtkrcv2_pid;
 
@@ -86,7 +88,9 @@ extern gnss_sol_t best;
 
 //Functions
 extern void start_processing(void);
-extern void close_semor(int);
+extern void close_semor(int status);
+
+extern int get_imu_data(char line[100]);
 
 
 #ifdef __cplusplus
