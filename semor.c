@@ -8,9 +8,10 @@
 #define MAX_LINE 256
 
 //Set default configuration
+int relative = 0;
 int logs=0;
 int debug=1;
-double init_bg_unc = 4.8481367284e-05;
+double init_bg_unc = 2.42406840554768e-05;
 double init_ba_unc = 0.048901633857000000;
 double psd_gyro  = 3.38802348178723e-09;
 double psd_acce      =     2.60420170553977e-06;     // acce noise PSD (m^2/s^3)  
@@ -18,6 +19,12 @@ double psd_bg        =     2.61160339323310e-14;     // gyro bias random walk PS
 double psd_ba        =     1.66067346797506e-09;
 int sample_rate = 104; //in hz
 int imu_init_epochs =  300;//in seconds
+int imu_drift = 60;
+
+double init_x;
+double init_y;
+double init_z;
+int init_pos = 0; //7 if init_x, init_y and init_z are assigned with a value, semor stops otherwise
 
 char str2str_path[PATH_MAX];
 char rtkrcv_path[PATH_MAX];
@@ -42,6 +49,33 @@ void read_conf_line(char line[MAX_LINE]){
     char *token;
     char *eptr;
     token = strtok(line, "#= \t");
+
+    if(strstr(token, "init-x")){
+        init_x = strtod(strtok(NULL, "#= \t"), &eptr);
+        if(init_x != 0){
+            init_pos |= 1;
+        }
+        return;
+    }
+    if(strstr(token, "init-y")){
+        init_y = strtod(strtok(NULL, "#= \t"), &eptr);
+        if(init_y != 0){
+            init_pos |= 2;
+        }
+        return;
+    }
+    if(strstr(token, "init-z")){
+        init_z = strtod(strtok(NULL, "#= \t"), &eptr);
+        if(init_z != 0){
+            init_pos |= 4;
+        }
+        return;
+    }
+
+    if(strstr(token, "imu-drift")){
+        imu_drift = atoi(strtok(NULL, "#= \t"));
+        return;
+    }
     
     if(strstr(token, "debug")){
         debug = atoi(strtok(NULL, "#= \t"));
@@ -124,41 +158,50 @@ int main(int argc, char *argv[]){
     char line[MAX_LINE];
 	char cwd[PATH_MAX-400];
     char semor_conf_path[PATH_MAX];
+    char pids_file[PATH_MAX];
 
-	if (getcwd(cwd, sizeof(cwd)) != NULL) {
-		for(i=0;;i++){
-			if(cwd[i] == '\0'){
-				cwd[i] = '/';
-				cwd[i+1] = '\0';
-				break;
-			}
-		}
-		//printf("Current working dir: %s\n", cwd);
-	} else {
-		perror("getcwd() error");
-		return 1;
-	}
-
-	if(argv[0][0] == '.')
-		memmove(argv[0], argv[0]+2, strlen(argv[0]));
-
-    for(i=strlen(argv[0])-1; i >= 0; i--){
-        if(argv[0][i] != '/'){
-            argv[0][i] = '\0';
-        }
-        else
-            break;
+    char path[60];
+    if(argc == 2 && argv[0] == '-' && argv[1] == 'r'){
+        relative = 1;
+        sprintf(str2str_path, "RTKLIB-b34e/app/consapp/str2str/gcc/str2str");
+        sprintf(rtkrcv_path, "RTKLIB-b34e/app/consapp/rtkrcv/gcc/rtkrcv");
+        sprintf(rtkconf, "conf/rtk4pid.conf");
+        sprintf(pppconf, "conf/ppp4pid_navcast.conf");
+        sprintf(semor_conf_path, "bin/semor.conf");
+        sprintf(pids_file, "pids.txt");
     }
-
-	sprintf(root_path, "%s%s", cwd, argv[0]);
-    //Set default paths
-    sprintf(str2str_path, "%sRTKLIB-b34e/app/consapp/str2str/gcc/str2str", root_path);
-    sprintf(rtkrcv_path, "%sRTKLIB-b34e/app/consapp/rtkrcv/gcc/rtkrcv", root_path);
-    sprintf(rtkconf, "%sconf/rtk4pid.conf", root_path);
-    sprintf(pppconf, "%sconf/ppp4pid_navcast.conf", root_path);
-    
-
-    sprintf(semor_conf_path, "%ssemor.conf", root_path);
+    else{
+        sprintf(path, "/proc/%d/exe", getpid());
+        if(readlink(path, root_path, PATH_MAX) == -1){
+            perror("SEMOR: readlink()");
+            printf("\n");
+            printf("Possible workaround:\n");
+            printf("Go exactly in the SEMOR root folder and run semor with the argument '-r' (use relative paths)\n");
+            printf("Example:\n>cd SEMOR\n>bin/semor -r");
+        }
+        for(i=strlen(root_path)-1; i >= 0; i--){
+            if(root_path[i] != '/'){
+                root_path[i] = '\0';
+            }
+            else
+                break;
+        }
+        root_path[strlen(root_path)-1] = '\0';
+        for(i=strlen(root_path)-1; i >= 0; i--){
+            if(root_path[i] != '/'){
+                root_path[i] = '\0';
+            }
+            else
+                break;
+        }
+        //Set default paths
+        sprintf(pids_file, "%spids.txt", root_path);
+        sprintf(str2str_path, "%sRTKLIB-b34e/app/consapp/str2str/gcc/str2str", root_path);
+        sprintf(rtkrcv_path, "%sRTKLIB-b34e/app/consapp/rtkrcv/gcc/rtkrcv", root_path);
+        sprintf(rtkconf, "%sconf/rtk4pid.conf", root_path);
+        sprintf(pppconf, "%sconf/ppp4pid_navcast.conf", root_path);
+        sprintf(semor_conf_path, "%ssemor.conf", root_path);
+    }
     FILE* f;
     if( access( semor_conf_path, F_OK ) == 0 ) {
         // read file
@@ -173,15 +216,16 @@ int main(int argc, char *argv[]){
         fprintf(f, "#General\n");
         fprintf(f, "debug=%d   #0:disabled (get realtime data from rtkrcv and imu), 1:enabled (get data from files (in test folder))\n", debug);
         fprintf(f, "logs=%d   #0:disabled, 1:enabled\n", logs);
-        fprintf(f, "str2str-path=%sRTKLIB-b34e/app/consapp/str2str/gcc/str2str\n", root_path);
+        fprintf(f, "str2str-path=%s\n", str2str_path);
         fprintf(f, "str2str-in=%s\n", str2str_in);
         fprintf(f, "str2str-out1-port=%s\n", str2str_out1_port);
         fprintf(f, "str2str-out2-port=%s\n", str2str_out2_port);
-        fprintf(f, "rtkrcv-path=%sRTKLIB-b34e/app/consapp/rtkrcv/gcc/rtkrcv\n", root_path);
-        fprintf(f, "rtkconf=%sconf/rtk4pid.conf\n", root_path);
-        fprintf(f, "pppconf=%sconf/ppp4pid_navcast.conf\n", root_path);
+        fprintf(f, "rtkrcv-path=%s\n", rtkrcv_path);
+        fprintf(f, "rtkconf=%s\n", rtkconf);
+        fprintf(f, "pppconf=%s\n", pppconf);
         fprintf(f, "\n#IMU parameters\n");
         fprintf(f, "imu-init-epochs(sec)=%d\n", imu_init_epochs);
+        fprintf(f, "imu-drift=%d\n", imu_drift);
         fprintf(f, "sample-rate(hz)=%d\n", sample_rate);
         fprintf(f, "init-bg-unc=%.15g\n", init_bg_unc);
         fprintf(f, "init-ba-unc=%.15g\n", init_ba_unc);
@@ -189,8 +233,17 @@ int main(int argc, char *argv[]){
         fprintf(f, "psd-acce=%.15g\n", psd_acce);
         fprintf(f, "psd-bg=%.15g\n", psd_bg);
         fprintf(f, "psd-ba=%.15g\n", psd_ba);
+        fprintf(f, "#Initialization coordinates\n", psd_ba);
+        fprintf(f, "init-x=0\n");
+        fprintf(f, "init-y=0\n");
+        fprintf(f, "init-z=0\n");
     }
     fclose(f);
+
+    if(init_pos != 7){
+        printf("Please, set the initialization coordinates in the configuration file.\n");
+        close_semor(1);
+    }
 
     //Initialize shared variables
     str2str_pid = rtkrcv1_pid = rtkrcv2_pid = -1;
@@ -239,8 +292,6 @@ int main(int argc, char *argv[]){
         }
 
         //Create pids.txt file to manually kill previous executed processes if needed
-        char pids_file[PATH_MAX];
-        sprintf(pids_file, "%spids.txt", root_path);
         FILE *pids = fopen(pids_file, "w");
         fprintf(pids, "str2str: %d\nrtkrcv(1): %d\nrtkrcv(2): %d", str2str_pid, rtkrcv1_pid, rtkrcv2_pid);
         fclose(pids);

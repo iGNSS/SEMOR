@@ -32,6 +32,7 @@ void ReaderIMU::obsEpoch(string& line) {
 		// Split words in the line
 		istringstream iss(line);
 		vector<string> words{ istream_iterator<string>{iss}, istream_iterator<string>{} };
+		_IMUdata.week = stoi(words[0]);
 		// Extract observation time
 		epochTime = stod(words[1]);
 		// Organizing Acceleration Observations

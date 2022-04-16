@@ -8,7 +8,7 @@ set(CMAKE_BUILD_TYPE Debug)
 
 # add every executable in a folder
 file(GLOB LGI_FILES ./loose-gnss-imu/*.cpp) # Loose-GNSS-IMU files
-add_executable(semor semor.c src/client.c src/ctocpp.cpp ${LGI_FILES})
+add_executable(semor semor.c src/client.c src/ctocpp.cpp ./loose-gnss-imu/imu_read.c ${LGI_FILES})
 
 
 # add include dir

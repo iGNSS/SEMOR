@@ -32,6 +32,8 @@
 gnss_sol_t sol[3]; /* GPS=0, GALILEO=1, IMU=2 */
 gnss_sol_t best;
 
+gnss_sol_t init_pos; //initial position for imu initialization
+
 FILE* sol_file[3];
 
 FILE *file;
@@ -42,9 +44,10 @@ int isset_first_pos;
 int imu_ready;
 gnss_sol_t first_pos;
 
-int wait_read[2] = {0, 0};
+int wait_read[2];
 int last_week[2];
 int seconds;
+int n_imu; //how many times the imu solution has been used consecutively
 
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -63,6 +66,7 @@ LocData_t get_data(){ //SiConsulting
 
 //Close SEMOR and all processes started by it (rtkrcv and str2str)
 void close_semor(int status){
+    printf("\nSEMOR terminated.\n");
     if(str2str_pid != -1 && kill(str2str_pid, SIGKILL) == -1){
         perror("SEMOR: Error killing str2str process");
     }
@@ -79,7 +83,6 @@ void close_semor(int status){
         fclose(sol_file[IMU]);
     }
     fclose(file);
-    printf("\nSEMOR terminated.\n");
     exit(status);
 }
 
@@ -259,7 +262,7 @@ int get_best_sol2(int sol1_idx, int sol2_idx){ //if 2 gnss solutions available -
     return 0;
 }
 
-int get_best_sol_3(){ //if 3 solutions available - 0: no best found, 1: best found
+int get_best_sol_3(){ //if 3 solutions available - 0: no best found, 1: best found (if no best found -> use IMU)
     if(similar_pos(sol[GPS], sol[GALILEO])){
         if(similar_pos(sol[GPS], sol[IMU])){
             gnss_avg_3(sol[GPS], sol[GALILEO], sol[IMU]);
@@ -285,7 +288,7 @@ int get_best_sol_3(){ //if 3 solutions available - 0: no best found, 1: best fou
 void process_solutions(int* check_sols){
     int chk_sols = *check_sols;
     int i;
-    int best_found = 1;
+    int is_best_found = 1;
     int best_idx = -1; //0: gps, 1:galileo, 2:imu, 3:best
 
     if(debug){
@@ -319,45 +322,66 @@ void process_solutions(int* check_sols){
             break;
         case 3: //GPS and GALILEO
             best_idx = 3;
-            best_found = get_best_sol2(GPS, GALILEO);
+            is_best_found = get_best_sol2(GPS, GALILEO);
             break;
         case 4: //only IMU
             best_idx = IMU;
             break;
         case 5: //GPS and IMU
             best_idx = 3;
-            best_found = get_best_sol2(GPS, IMU);
+            is_best_found = get_best_sol2(GPS, IMU);
             break;
         case 6: //GALILEO and IMU
             best_idx = 3;
-            best_found = get_best_sol2(GALILEO, IMU);
+            is_best_found = get_best_sol2(GALILEO, IMU);
             break;
         case 7: //all solutions available
             best_idx = 3;
-            best_found = get_best_sol_3();
+            is_best_found = get_best_sol_3();
             break;
     }
     if(!wait_read[GPS]) //DEBUG ________ RIMUOVERE!!!!!!!
         best_idx =  GPS;
     else
         best_idx = -1;
+    
 
     //Here we have the best position
-    if(logs){
+    if(logs && imu_ready){
         print_solution(GPS);
         print_solution(GALILEO);
         print_solution(IMU);
     }
 
     print_solutions();
+
+    if(is_best_found == 0 || best_idx == IMU){ //if is_best_found == 0 (IMU solutions is used)
+        if(n_imu == imu_drift){
+            //REINITIALIZE SEMOR
+            printf("Re-initialize SEMOR\n");
+            close_semor(1);
+        }
+        else
+            n_imu++;
+    }
+    else{
+        n_imu = 0;
+    }
+
     //So let's generate the next imu position
-    if(best_idx != -1){ //se c'è una soluzione migliore:
+    if(/*is_best_found*/ best_idx != -1){ //se c'è una soluzione migliore:
         gnsscopy(&sol[IMU], sol[best_idx]); //TODO: get best solution
         sol[IMU].time.week = 0;
         sol[IMU].time.sec += 1; //Get imu position of the next second
-        imu_sol(&sol[IMU]); //this takes 1 second
+        if(!imu_ready){
+            imu_sol(&init_pos);
+            init_pos.time.sec++;
+        }
+        else
+            imu_sol(&sol[IMU]); //this takes 1 second
     }
     else{
+        
         sol[IMU].time.week = 0; //if no best solutions, mark the imu solution as already used
     }
 
@@ -386,6 +410,9 @@ void handle_connection(){
     int galileo_ready = 0;
     int new_gnss_data = 0;
 
+    init_imu(init_pos);
+    init_pos.time.sec++;
+
     //Inizializzo soluzione imu
     sol[IMU].time.week = 0;
     //Inizializzazione socket
@@ -399,6 +426,9 @@ void handle_connection(){
     fds[0].events = fds[1].events = fds[3].events = POLLIN;
 
     fcntl(0, F_SETFL, fcntl(0, F_GETFL) | O_NONBLOCK);
+
+    wait_read[0] = wait_read[1] = 0;
+    n_imu = 0;
 
     while(1){
         check_sols = 0;
@@ -424,10 +454,11 @@ void handle_connection(){
                         check_sols |= i+1;
                     }
                     sol[i] = str2gnss(buf[i]);//Parse string to gnss_sol_t structure
-                    if(i == GPS && !isset_first_pos){ //Initialize imu with rtk solution (since it is more accurate)
+                    /*if(i == GPS && !isset_first_pos){ //Initialize imu with rtk solution (since it is more accurate)
                         isset_first_pos = 1;
-                        init_imu(sol[i]);
-                    }
+                        init_imu(init_pos);
+                        init_pos.time.sec++;
+                    }*/
                 }
             }
         }
@@ -450,17 +481,46 @@ void handle_connection(){
 void start_processing(void){
     int ret;
     int i;
-    char path[PATH_MAX];
+    char path[3][PATH_MAX];
+
+    //Initialize structure of init_pos
+    init_pos.a = init_x;
+    init_pos.b = init_y;
+    init_pos.c = init_z;
+
+    init_pos.va = 0;
+    init_pos.vb = 0;
+    init_pos.vc = 0;
+
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    int week = ((tv.tv_sec+LEAP_SECONDS-GPS_EPOCH))/(7*24*3600);
+    int sec = (double)(((tv.tv_sec+LEAP_SECONDS-GPS_EPOCH))%(7*24*3600))+(tv.tv_usec / 1000000.0);
+
+    //init_pos.time.week = week;
+    //init_pos.time.sec = sec;
+
+    //DEBUG
+    init_pos.time.week = 2032;
+    init_pos.time.sec = 273375;
+
 
     if(logs){
-        sprintf(path, "%sgps.log", root_path);
-        sol_file[GPS] = fopen(path, "w");
+        if(relative){
+            sprintf(path[0], "gps.log");
+            sprintf(path[1], "galileo.log");
+            sprintf(path[2], "imu.log");
+        }
+        else{
+            sprintf(path[0], "%sgps.log", root_path);
+            sprintf(path[1], "%sgalileo.log", root_path);
+            sprintf(path[2], "%simu.log", root_path);
+        }
+        sol_file[GPS] = fopen(path[0], "w");
 
-        sprintf(path, "%sgalileo.log", root_path);
-        sol_file[GALILEO] = fopen(path, "w");
+        sol_file[GALILEO] = fopen(path[1], "w");
 
-        sprintf(path, "%simu.log", root_path);
-        sol_file[IMU] = fopen(path, "w");
+        sol_file[IMU] = fopen(path[2], "w");
     }
 
     file = fopen(FILE_PATH, "w");

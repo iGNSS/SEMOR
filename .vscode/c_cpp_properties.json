@@ -5,7 +5,8 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/loose-gnss-imu/include",
-                "${workspaceFolder}/loose-gnss-imu/Libraries/eigen"
+                "${workspaceFolder}/loose-gnss-imu/Libraries/eigen",
+                "/usr/include"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",

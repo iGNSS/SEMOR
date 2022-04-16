@@ -22,6 +22,7 @@ public:
 	// Data Structures
 	// To store observations in an epoch
 	struct IMUEpochInfo {
+		int week;
 		double imuTime;
 		std::vector<double> Acc;
 		std::vector<double> Gyr;

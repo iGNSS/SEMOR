@@ -12,25 +12,29 @@
 */
 
 #define MAXSTR 256
-#define IMU_PORT "8100"
-#define PORT1 "8090" /* rtkrcv1 */
-#define PORT2 "8091" /* rtkrcv2 */
-#define IMU_DATA_LAST_N_SEC 2
-#define IMU_HZ 100
 #define LEAP_SECONDS 18
+#define IMU_LENGTH 100 //length of imu data string
+#define GPS_EPOCH 315964800 /* 6th January 1980*/
 
 extern char root_path[PATH_MAX-200];
 
+extern int relative; //-r argument (to read files using relative paths)
+
 extern int logs;
 extern int debug;
-extern double init_bg_unc; //START
+extern double init_bg_unc;
 extern double init_ba_unc;
 extern double psd_gyro;
 extern double psd_acce;     // acce noise PSD (m^2/s^3)  
 extern double psd_bg;     // gyro bias random walk PSD (rad^2/s^3)
 extern double psd_ba;
-extern int sample_rate; //END
+extern int sample_rate;
 extern int imu_init_epochs;//in seconds
+extern int imu_drift; //in seconds
+
+extern double init_x;
+extern double init_y;
+extern double init_z;
 
 extern pid_t str2str_pid, rtkrcv1_pid, rtkrcv2_pid;
 
@@ -45,7 +49,7 @@ typedef struct {
     double dSdn;
     double dSde;
     double dSdu;
-    double dRobInd;
+    /*double dRobInd;*/
     uint8_t ui8FixQual;
     uint8_t ui8TS[50+1]; //+1 \0
 }LocData_t;
@@ -89,9 +93,14 @@ extern gnss_sol_t best;
 //Functions
 extern void start_processing(void);
 extern void close_semor(int status);
-
-extern int get_imu_data(char line[100]);
-
+#ifdef __cplusplus
+//extern Loosely *imu; //##CHANGED##
+extern "C"{
+#endif
+int get_imu_data(char line[IMU_LENGTH]);
+#ifdef __cplusplus
+}
+#endif
 
 #ifdef __cplusplus
 //extern Loosely *imu; //##CHANGED##

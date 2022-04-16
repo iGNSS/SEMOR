@@ -10,10 +10,12 @@
 
 #include "pch.h"
 
+using namespace Eigen;
+
 // Functions
 void radius(double &_Rm, double &_Rn, double lat);
 std::vector<double> earthrate(double lat);
-std::vector<double> ecef2geo(std::vector<double> ecefXYZ);
+Vector3d ecef2geo(Vector3d ecefXYZ);
 std::vector<double> enu2ecef(std::vector<double> ENU_i, std::vector<double> ECEF_o, std::vector<double> LLH_o);
 std::vector<double> ecef2enu(std::vector<double> ECEF_i, std::vector<double> ECEF_o, std::vector<double> LLH_o);
 std::vector<double> transrate(double lat, double _Rm, double _Rn, double vn, double ve, double h);

@@ -8,6 +8,7 @@
 #include "pch.h"
 #include "GeoUtils.h"
 using namespace std;
+using namespace Eigen;
 
 // Constants
 const double PI = 3.1415926535898;
@@ -16,12 +17,12 @@ const double ECC = 0.0818191908426;
 const double SEMI_MAJOR = 6378137.0;
 
 // Coverts from ECEF to Geodetic Coordinates
-vector<double> ecef2geo(vector<double> ecefXYZ) {
+Vector3d ecef2geo(Vector3d ecefXYZ) {
 	// Output vector - Lat, Long, Height
-	vector<double> GEO;
+	Vector3d GEO;
 	// Variables
 	double x, y, z;
-	x = ecefXYZ.at(0); y = ecefXYZ.at(1); z = ecefXYZ.at(2);
+	x = ecefXYZ(0); y = ecefXYZ(1); z = ecefXYZ(2);
 	// Semi Major Axis and Eccentricity
 	const double a = 6378137; const double e = 0.08181979;
 	// Compute Longitude
@@ -48,9 +49,9 @@ vector<double> ecef2geo(vector<double> ecefXYZ) {
 	// Recalculate Height
 	h = (p / cos(phi_i)) - Rn;
 	// Populate output vector
-	GEO.push_back(phi_i);
-	GEO.push_back(lambda);
-	GEO.push_back(h);
+	GEO(0) = phi_i;
+	GEO(1) = lambda;
+	GEO(2) = h;
 	return GEO;
 }
 

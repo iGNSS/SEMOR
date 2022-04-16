@@ -7,10 +7,11 @@
 
 #include "pch.h"
 #include "Loosely.h"
-#include "ReadIMU.h"
+#include "semor.h"
 using namespace std;
 using namespace Eigen;
 
+ofstream out;
 
 // PI
 const double PI = 3.1415926535898;
@@ -19,15 +20,16 @@ const double PI = 3.1415926535898;
 VectorXd x(15);
 MatrixXd P(15, 15);
 MatrixXd Q(15, 15);
-MatrixXd v;
+MatrixXd v(15,15);
 MatrixXd R;
-MatrixXd H;
+MatrixXd H(3, 15);
+Matrix3d Cne;
 //Dblh2Dxyz
 Matrix3d T;
 MatrixXd Dxyz;
 //blh2xyz
 Matrix3d Cen;
-Vector3d xyz;
+//Vector3d xyz;
 
 Matrix3d Cnb;
 
@@ -36,7 +38,7 @@ Matrix<double, 15, 15> Pa;
 Vector3d init_att_unc;
 Vector3d init_vel_unc;
 Vector3d init_pos_unc;
-const double nt=1/sample_rate;
+const double nt=1.0/sample_rate;
 const double D2R = PI/180.0;
 const double RE_WGS84 = 6378137.0;
 const double FE_WGS84    =(1.0/298.257223563); //earth flattening (WGS84)
@@ -73,7 +75,7 @@ class Earth{
 		Vector3d gcc;
 
 };
-
+Vector3d lever;
 Vector3d pos;
 Vector3d vel;
 double yaw;
@@ -102,30 +104,37 @@ VectorXd initP(15);
 VectorXd initQ(15);
 Matrix3d posvar;
 Vector3d initPosvar;
-Vector3d va;
-MatrixXd dv0(3, 1);
-MatrixXd dw0(3, 1);
-MatrixXd dv(3, 1);
-MatrixXd dw(3, 1);
+VectorXd va(6);
+Vector3d dv0;
+Vector3d dw0;
+Vector3d dv;
+Vector3d dw;
 Vector3d pos_mid;
 Vector3d vel_mid;
 MatrixXd Q0(15, 15);
 MatrixXd P0(15, 15);
 Vector3d pos_new;
 Vector3d vel_new;
-MatrixXd old_dv(3, 1);
-MatrixXd old_dw(3, 1);
-MatrixXd dv_rot(3, 1);
-MatrixXd dv_scul(3, 1);
-Matrix3d dv_sf;
+Vector3d old_dv;
+Vector3d old_dw;
+Vector3d dv_rot;
+Vector3d dv_scul;
+Vector3d dv_sf;
 Vector3d dv_cor;
-MatrixXd dw_cone(3, 1);
-MatrixXd phi_b_ib(3, 1);
-MatrixXd phi_n_in(3, 1);
+Vector3d dw_cone;
+Vector3d phi_b_ib;
+Vector3d phi_n_in;
 Matrix3d Cbb;
 Matrix3d Cnn;
 Matrix3d Cnb_new;
 Vector3d att_new;
+
+Vector3d VAR1;
+Vector3d VAR2;
+
+Vector3d ve;
+
+Matrix3d Pp;
 
 
 
@@ -143,21 +152,24 @@ Loosely::Loosely(){
 	init_att_unc << 0.3, 0.3, 0.5;
 	init_vel_unc << 10, 10, 10;
 	init_pos_unc << 30, 30, 30;
+	lever << 0, 0, 0;
 }
 
 
 void read_imu(){
 	string line;
-	//Read IMU i2c
-	//char buf[IMU_LENGTH];
-	//read_raw_imu(buf);
-	//TODO: char[] to line
-
-	//Read IMU file
-	getline(fimu, line);
-	if (line.find("GPS") != std::string::npos) {
+	if(debug){
 		getline(fimu, line);
+		if (line.find("GPS") != std::string::npos) {
+			getline(fimu, line);
+		}
 	}
+	else{
+		char buf[IMU_LENGTH];
+		while(get_imu_data(buf) == 1){}; //while no imu data or errors reading imu data
+		line = string(buf);
+	}
+
 	OBSimu.clearObs();
 	OBSimu.obsEpoch(line);
 }
@@ -236,6 +248,63 @@ void Loosely::epochOutputGPS(ofstream& fout) {
 		<< "\n";
 }*/
 
+void closeF(){
+	out.close();
+}
+
+void print(MatrixXd m){
+	stringstream ss;
+	for(int i=0; i<m.rows(); i++){
+		for(int j=0; j<m.cols(); j++){
+			ss << m(i, j) << ",";
+		}
+		cout << ss.str() << endl;
+		ss.str("");
+	}
+	cout.flush();
+}
+
+void print(Matrix3d m){
+	stringstream ss;
+	for(int i=0; i<3; i++){
+		for(int j=0; j<3; j++){
+			ss << m(i, j) << ",";
+		}
+		cout << ss.str() << endl;
+		ss.str("");
+	}
+	cout.flush();
+}
+
+void print(Vector3d v){
+	stringstream ss;
+	for(int i=0; i<3; i++){
+		for(int j=0; j<1; j++){
+			ss << v(i, j) << ",";
+		}
+		cout << ss.str() << endl;
+		ss.str("");
+	}
+	cout.flush();
+}
+
+void print(VectorXd v){
+	stringstream ss;
+	for(int i=0; i<v.rows(); i++){
+		for(int j=0; j<1; j++){
+			ss << v(i, j) << ",";
+		}
+		cout << ss.str() << endl;
+		ss.str("");
+	}
+	cout.flush();
+}
+
+void print(double value){
+	cout << value << endl;
+	cout.flush();
+}
+
 // A routine to facilitate IMU mechanization in ECEF
 void Loosely::SolutionIMU(ReaderIMU IMU, IMUmechECEF& MechECEF) {
 	// Compute time interval
@@ -303,9 +372,10 @@ void att2Cnb(Vector3d att){
 	Cnb << cosr*cosy-sinp*sinr*siny, -cosp*siny,  sinr*cosy+sinp*cosr*siny, cosr*siny+sinp*sinr*cosy, cosp*cosy, sinr*siny-sinp*cosr*cosy, -cosp*sinr, sinp, cosp*cosr;;
 }
 
-/*Vector3d Cnb2att(Matrix3d Cnb){
+Vector3d Cnb2att(Matrix3d Cnb){
 	Vector3d att;
 	att << asin(Cnb(2,1)), atan2(-Cnb(2,0),Cnb(2,2)), atan2(-Cnb(0,1),Cnb(1,1));
+	return att;
 }
 
 Matrix3d askew(Matrix<double, 3, 1> vector){
@@ -351,19 +421,54 @@ MatrixXd update_trans_mat(Earth eth, Vector3d vel, MatrixXd fn, Vector3d tauA, V
 	Matrix3d Fpv = Mpv;    
 		
 	// time continuous state transition matrix
-	Matrix<double, 15, 15> Ft;
-	Ft << Faa       Fav       Fap      -Cnb            zero33
-		Fva       Fvv       Fvp      zero33              Cnb
-		zero33    Fpv       Fpp      zero33              zero33
-		zero33    zero33    zero33   diag(-1./tauG)  zero33
-		zero33    zero33    zero33   zero33              diag(-1./tauA);      
+	Vector3d tauG2;
+	tauG2(0) = -1/tauG(0);
+	tauG2(1) = -1/tauG(1);
+	tauG2(2) = -1/tauG(2);
+	Vector3d tauA2;
+	tauA2(0) = -1/tauA(0);
+	tauA2(1) = -1/tauA(1);
+	tauA2(2) = -1/tauA(2);
+	MatrixXd Ft(15, 15);
+	/*Ft << Faa,       Fav,       Fap,      -Cnb,            zero33,
+		Fva,       Fvv,       Fvp,      zero33,              Cnb,
+		zero33,    Fpv,       Fpp,      zero33,              zero33,
+		zero33,    zero33,    zero33,   tauG2.asDiagonal(),  zero33,
+		zero33,    zero33,    zero33,   zero33,              tauA2.asDiagonal();*/
+
+	Ft << 	Faa(0,0),Faa(0,1),Faa(0,2),Fav(0,0),Fav(0,1),Fav(0,2),Fap(0,0),Fap(0,1),Fap(0,2),-Cnb(0,0),-Cnb(0,1),-Cnb(0,2), 0, 0, 0,
+			Faa(1,0),Faa(1,1),Faa(1,2),Fav(1,0),Fav(1,1),Fav(1,2),Fap(1,0),Fap(1,1),Fap(1,2),-Cnb(1,0),-Cnb(1,1),-Cnb(1,2), 0, 0, 0,
+			Faa(2,0),Faa(2,1),Faa(2,2),Fav(2,0),Fav(2,1),Fav(2,2),Fap(2,0),Fap(2,1),Fap(2,2),-Cnb(2,0),-Cnb(2,1),-Cnb(2,2), 0, 0, 0,
+
+			Fva(0,0),Fva(0,1),Fva(0,2),Fvv(0,0),Fvv(0,1),Fvv(0,2),Fvp(0,0),Fvp(0,1),Fvp(0,2),0,0,0,Cnb(0,0),Cnb(0,1),Cnb(0,2),
+			Fva(1,0),Fva(1,1),Fva(1,2),Fvv(1,0),Fvv(1,1),Fvv(1,2),Fvp(1,0),Fvp(1,1),Fvp(1,2),0,0,0,Cnb(1,0),Cnb(1,1),Cnb(1,2),
+			Fva(2,0),Fva(2,1),Fva(2,2),Fvv(2,0),Fvv(2,1),Fvv(2,2),Fvp(2,0),Fvp(2,1),Fvp(2,2),0,0,0,Cnb(2,0),Cnb(2,1),Cnb(2,2),
+
+			0,0,0,Fpv(0,0),Fpv(0,1),Fpv(0,2),Fpp(0,0),Fpp(0,1),Fpp(0,2),0,0,0,0,0,0,
+			0,0,0,Fpv(1,0),Fpv(1,1),Fpv(1,2),Fpp(1,0),Fpp(1,1),Fpp(1,2),0,0,0,0,0,0,
+			0,0,0,Fpv(2,0),Fpv(2,1),Fpv(2,2),Fpp(2,0),Fpp(2,1),Fpp(2,2),0,0,0,0,0,0,
+
+			0,0,0,0,0,0,0,0,0,   tauG2(0),0,0,   0,0,0,
+			0,0,0,0,0,0,0,0,0,   0,tauG2(1),0,   0,0,0,
+			0,0,0,0,0,0,0,0,0,   0,0,tauG2(2),   0,0,0,
+
+			0,0,0,0,0,0,0,0,0,0,0,0,   tauA2(0),0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,   0,tauA2(1),0,
+			0,0,0,0,0,0,0,0,0,0,0,0,   0,0,tauA2(2);
 
 	// discretization
+	MatrixXd ret(15, 15);
+	ret = MatrixXd::Identity(15, 15);
+	ret = ret+Ft*nt;
+
+	MatrixXd a(15, 15);
+	a = Ft*nt;
+	a = a.array().exp().matrix();
 	if(nt>0.1)
-		return (Ft*nt).exp(); 
+		return a;
 	else
-		return MatrixXd::Identity(size(Ft))+Ft*nt;
-}*/
+		return ret;
+}
 
 void earth_update(Vector3d pos, Vector3d vel){
 	eth.Re = 6378137;                    
@@ -427,7 +532,8 @@ void Dblh2Dxyz(Vector3d blh){
 }
 
 
-void blh2xyz(Vector3d blh){
+Vector3d blh2xyz(Vector3d blh){
+	Vector3d xyz;
 	double B = blh(0); double L = blh(1); double H = blh(2);
 	double sinB = sin(B); double cosB = cos(B); double sinL = sin(L); double cosL = cos(L);
 	double N = RE_WGS84/sqrt(1-pow(ECC_WGS84, 2)*pow(sinB, 2));
@@ -438,6 +544,21 @@ void blh2xyz(Vector3d blh){
 	// transformation matrix from n-frame to e-frame
 	Cen << -sinL, cosL, 0, -sinB*cosL, -sinB*sinL, cosB, cosB*cosL, cosB*sinL, sinB;
 	Cen.transposeInPlace();
+	return xyz;
+}
+
+Vector3d xyz2blh(Vector3d xyz){
+
+	Vector3d blh = ecef2geo(xyz);
+	double B=blh(0); double L=blh(1);
+	double sinB = sin(B); double cosB = cos(B);
+	double sinL = sin(L); double cosL = cos(L);
+
+	Cne <<   -sinL,      cosL,        0,
+        -sinB*cosL, -sinB*sinL, cosB,
+        cosB*cosL,  cosB*sinL, sinB;
+
+	return blh;
 }
 
 void Loosely::get_imu_sol(gnss_sol_t* int_sol){
@@ -448,8 +569,8 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 				_dT = 1.0;
 				// Initialize IMU Mechanization
 				MechECEF.InitializeMechECEF(_ECEF_imu, _LLH_o, GNSSsol.velXYZ, iniIMU._RPY, iniIMU._ACCbias, iniIMU._GYRbias);
-
 				imu_ready = 1; //Tells client.c that it can read imu data
+				printf("SEMOR: End initialization\n");
 			}
 			read_imu();
 			if(imu_ready){
@@ -458,11 +579,11 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 		}
 		return;
 	}
-	//If imu is ready:
+	//IMU is ready:
 
 	//Initialize IMU mechanization with initial position, initial velocity and biases
 	_ECEF_o = eigVector2std(double2eigVector((*int_sol).a, (*int_sol).b, (*int_sol).c));
-	_LLH_o = ecef2geo(_ECEF_o);	
+	_LLH_o = eigVector2std(ecef2geo(double2eigVector((*int_sol).a, (*int_sol).b, (*int_sol).c)));	
 	_ECEF_imu = _ECEF_o;
 	GNSSsol.velXYZ = eigVector2std(double2eigVector((*int_sol).va, (*int_sol).vb, (*int_sol).vc));
 	MechECEF.InitializeMechECEF(_ECEF_imu, _LLH_o, GNSSsol.velXYZ, iniIMU._RPY, iniIMU._ACCbias, iniIMU._GYRbias);
@@ -481,33 +602,36 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 	(*int_sol).b = IMUsol.posXYZ.at(1);
 	(*int_sol).c = IMUsol.posXYZ.at(2);
 
-	//With standard deviation
+	//STANDARD DEVIATION START
 	if(fst_pos){ //Variance Initialization
+		Vector3d geostdpos;
+		Vector3d tmp;
+
+		/*
+		decomment for production
 
 		pos << IMUsol.posXYZ.at(0), IMUsol.posXYZ.at(1), IMUsol.posXYZ.at(2);
 		vel << IMUsol.velXYZ.at(0), IMUsol.velXYZ.at(1), IMUsol.velXYZ.at(2);
-
-		Vector3d tmp;
-		std::vector<double> geostdpos = ecef2geo(eigVector2std(pos));
-		tmp(0) = geostdpos.at(0);
-		tmp(1) = geostdpos.at(1);
-		tmp(2) = geostdpos.at(2);
-		pos = tmp;
-
-		//togliere start
-		pos << -2408691.0460, 4698107.9065, 3566697.8630;
-		//pos << 34.04173, 117.14394, 6365076123.9;
 
 		geostdpos = ecef2geo(eigVector2std(pos));
 		tmp(0) = geostdpos.at(0);
 		tmp(1) = geostdpos.at(1);
 		tmp(2) = geostdpos.at(2);
 		pos = tmp;
-		//togliere end
+		*/
 
-		//pos << 0.597256716722096, 2.044547372093737, 35.064853186719120;
-		//vel << -1.723511926180124, -0.216003377465377, 0.024235396676032;
-		vel << 1.46913, 0.91224, -0.16498;
+		//debug start, to be removed when everything works
+		//pos << -2.408691046019300e+06 , 4.698107906468073e+06, 3.566697863037622e+06;
+		pos << (*int_sol).a , (*int_sol).b, (*int_sol).c;
+
+		pos = ecef2geo(pos);
+		/*tmp(0) = geostdpos(0);
+		tmp(1) = geostdpos(1);
+		tmp(2) = geostdpos(2);
+		pos = tmp;*/
+		//debug end, to be removed
+
+		//vel << 0, 0, 0;
 		init_att_unc(0) = init_att_unc(0) * D2R;
 		init_att_unc(1) = init_att_unc(1) * D2R;
 		init_att_unc(2) = init_att_unc(2) * D2R;
@@ -518,7 +642,7 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 
 
 
-		if (vel(0) < 1e-4){
+		/*if (fabs(vel(0)) < 1e-4){
 			vel(0) = 1e-4;
 		}
 		yaw = -atan2(vel(0), vel(1));
@@ -527,7 +651,7 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 
 		avp0 << att, vel, pos;
 		acc = Vector3d::Zero();
-		att2Cnb(att);
+		att2Cnb(att);*/
 		//Initialize IMU error
 		bg = Vector3d::Zero();
 		ba = Vector3d::Zero();
@@ -574,10 +698,10 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 		posvar = T * posvar * T.transpose(); //xyz variance
 
 		//variance
-		va << posvar(0, 0), posvar(1, 1), posvar(2, 2);
+		va << posvar(0, 0), posvar(1, 1), posvar(2, 2), posvar(0,1), posvar(1,2), posvar(0,2);
 		//printf("BB: %lf\n", posvar(0, 0));
 
-		for(int i = 0; i < 3; i++){
+		for(int i = 0; i < 6; i++){
 			if(va(i) < 0)
 				va(i) = -sqrt(-va(i));
 			else
@@ -585,21 +709,26 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 		}
 
 		fst_pos = 0;
+
+		/*dv0 << -0.791625976562500, 0.177917480468750, 9.638977050781250;
+		dw0 << -0.004286024305556, -0.024490017361111, 0.126399739583333;*/
+
 		//Debug print
-		//printf("AA: %lf %lf %lf\n", va(0), va(1), va(2));
+		printf("AA: %lf %lf %lf\n", va(0), va(1), va(2));
 		(*int_sol).sda = va(0);
 		(*int_sol).sdb = va(1);
 		(*int_sol).sdc = va(2);
+		(*int_sol).sdab = va(3);
+		(*int_sol).sdbc = va(4);
+		(*int_sol).sdca = va(5);
 	}else{
-		/*Vector3d oldpos = pos;
-		dv0 << -0.791625976562500, 0.177917480468750, 9.638977050781250;
-		dw0 << -0.004286024305556, -0.024490017361111, 0.126399739583333;
-		dw = Kg*dw0-bg*nt;
+		/*dw = Kg*dw0-bg*nt;
 		dv = Ka*dv0-ba*nt;
 
 		// extrapolate velocity and position
-		vel_mid = vel+ acc*(nt/2);                    
-		pos_mid = pos+ Mpv*(vel+vel_mid)/2*nt; 
+		vel_mid = vel+ acc*(nt/2);     
+		Vector3d a = vel+vel_mid;               
+		pos_mid = pos+ Mpv*(a)/2*nt;  //pos_mid = 0
 
 		// update the earth related parameters
 		earth_update(pos_mid,vel_mid);
@@ -624,7 +753,6 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 		dw_cone  = 1/12*old_dw.cross(dw0);
 		phi_b_ib = dw+dw_cone;
 		phi_n_in = eth.wnin*nt;
-		Matrix3d result;
 		Cbb = rvec2mat(phi_b_ib).transpose();
 		Cnn = rvec2mat(phi_n_in).transpose();
 		Cnb_new = Cnn*Cnb*Cbb;
@@ -673,17 +801,168 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 		P0=P+0.5*Q0;
 		P=Phi*P0*Phi.transpose()+0.5*Q0;
 
-		*/
+		Dblh2Dxyz(pos);
+		
+		initPosvar << P(6, 6), P(7, 7), P(8, 8);
+		posvar = initPosvar.array().matrix().asDiagonal(); //blh variance
+
+		posvar = T * posvar * T.transpose(); //xyz variance
+
+		//variance
+		va << posvar(0, 0), posvar(1, 1), posvar(2, 2);
+		//printf("BB: %lf\n", posvar(0, 0));
+
+		for(int i = 0; i < 3; i++){
+			if(va(i) < 0)
+				va(i) = -sqrt(-va(i));
+			else
+				va(i) = sqrt(va(i));
+		}
+		//Debug print
+		printf("AA: %lf %lf %lf\n", va(0), va(1), va(2));
+		(*int_sol).sda = va(0);
+		(*int_sol).sdb = va(1);
+		(*int_sol).sdc = va(2);*/
+
+		const int VAR_POS=10^2; /*const double VAR_VEL=0.0225*/; const int MAX_DPOS=10; /*const int MAX_DVEL=5;*/
+		Matrix<double, 1, 3> GNSS_pos; GNSS_pos << (*int_sol).a , (*int_sol).b, (*int_sol).c;
+		Matrix<double, 1, 3> GNSS_vel; GNSS_vel << 0, 0, 0;
+		Matrix<double, 1, 6> gnss_posP; gnss_posP << (*int_sol).sda, (*int_sol).sdb, (*int_sol).sdc, (*int_sol).sdab, (*int_sol).sdbc, (*int_sol).sdca;
+		Matrix<double, 1, 6> gnss_velP; gnss_velP << 0, 0, 0, 0, 0, 0;
+		Vector3d rr; rr = GNSS_pos.transpose(); 
+		Vector3d pos_GNSS=xyz2blh(rr); 
+		//Vector3d vel_GNSS=Cne*GNSS_vel.transpose();
+
+		Pp << gnss_posP(0), gnss_posP(3), gnss_posP(5), 
+		gnss_posP(3), gnss_posP(1), gnss_posP(4),
+		gnss_posP(5), gnss_posP(4), gnss_posP(2);
+
+		if(Pp.diagonal().maxCoeff()>VAR_POS)
+			rr=Vector3d::Zero();
+		else{
+			Pp=T.inverse()*Pp*T.transpose().inverse();
+			VAR1 << Pp(0,0), Pp(1,1), Pp(2,2);
+		}
+
+		/*Matrix<double, 1, 6> velP=gnss_velP; 
+		Pp << velP(0), velP(3), velP(5),
+			velP(3), velP(1), velP(4),
+			velP(5), velP(4), velP(2);
+		
+
+		if(Pp.diagonal().maxCoeff()>VAR_VEL)
+			ve=Vector3d::Zero();
+		else{
+			Pp=Cne*Pp*Cne.transpose();
+			VAR2 << Pp(0,0), Pp(1,1), Pp(2,2);
+			if(VAR2.norm()==0)
+				VAR2 << VAR_VEL, VAR_VEL, VAR_VEL;
+		}*/
+
+		Vector3d pos_INS=pos+Mpv*Cnb*lever;
+		//Vector3d vel_INS=vel+Cnb*askew(web)*lever;
+
+		v=pos_INS-pos_GNSS; 
+		R=VAR1.asDiagonal();
+		H=MatrixXd::Zero(3,15);
+		H(0,6)=1;H(1,7)=1;H(2,8)=1;
+
+		VectorXd x_pre = x;
+		MatrixXd P_pre = P;
+
+		////////////////////// measurement update
+		int nx= 15 /*size(x_pre,1)*/; int stat=1;
+
+		Q=H*P_pre*H.transpose()+R;
+		if(Q.determinant()==0)
+			stat=0;
+
+		MatrixXd K(15, 3); K =P_pre*H.transpose()*Q.inverse();
+		VectorXd xx(15); xx = K*v;
+		P=(MatrixXd::Identity(nx, nx)-K*H)*P_pre;
+
+		//if(~isreal(xx)||~isreal(P))
+		//	stat=0;
+
+		Vector3d h; h << xx(0), xx(1), xx(2);
+		Cnb = (Matrix3d::Identity()+askew(h))*Cnb;
+		//if ~isreal(Cnb)
+		//	stat=0;
+
+		//Cnb = Cnb;
+		att = Cnb2att(Cnb);
+		Vector3d xx_i;
+		//xx_i << xx(3), xx(4), xx(5);
+		//vel = vel-xx_i;
+		xx_i << xx(6), xx(7), xx(8);
+		pos = pos-xx_i;
+		xx_i << xx(9), xx(10), xx(11);
+		bg  = bg+xx_i;
+		xx_i << xx(12), xx(13), xx(14);
+		ba  = ba+xx_i;
+		x  << att, vel, pos, bg, ba;
+		//P = P;
+
+		Vector3d helper; helper << x(6), x(7), x(8);
+		rr=blh2xyz(helper); Dblh2Dxyz(helper);
+		pos=rr.transpose();
+
+		helper << x(3), x(4), x(5);
+		//vel=(Cen*helper).transpose();
+		helper << x(0), x(1), x(2);
+		att=helper.transpose()/0.0175;
+
+		if(att(2)>=0)
+			att(2)=360-att(2);
+		else
+			att(2)=-att(2);
+
+		initPosvar << P(6, 6), P(7, 7), P(8, 8);
+		posvar = initPosvar.array().matrix().asDiagonal(); //blh variance
+
+		posvar=T*posvar*T.transpose();        //blh_var to xyz_var
+		//velvar=P(4:6,4:6); velvar=Cen*velvar*Cen';    %enu_var to xyz_var
+
+
+		va << posvar(0, 0), posvar(1, 1), posvar(2, 2), posvar(0,1), posvar(1,2), posvar(0,2);
+
+		for(int i = 0; i < 6; i++){
+			if(va(i) < 0)
+				va(i) = -sqrt(-va(i));
+			else
+				va(i) = sqrt(va(i));
+		}
+
+		//Debug print
+		printf("AA: %lf %lf %lf\n", va(0), va(1), va(2));
+
+		(*int_sol).sda = va(0);
+		(*int_sol).sdb = va(1);
+		(*int_sol).sdc = va(2);
+		(*int_sol).sdab = va(3);
+		(*int_sol).sdbc = va(4);
+		(*int_sol).sdca = va(5);
+
 	}
+	//STANDARD DEVIATION END
+
 
 	//Mark imu solution as usable for the comparison (in order to get the best solution for SEMOR)
-	(*int_sol).time.week = 1;
-	printf("a\n");
+	(*int_sol).time.week = OBSimu._IMUdata.week;
 }
 
 void Loosely::init_imu(gnss_sol_t fst_pos){
+	printf("SEMOR: Start initialization\n");
 	FileIO FIO;
-	FIO.fileSafeIn("test/tokyo_imu.csv", fimu);
+
+	out.open("debug.txt");
+
+	stringstream ss;
+	if(relative)
+		ss << "test/tokyo_imu.csv";
+	else
+		ss << root_path << "test/tokyo_imu.csv";
+	FIO.fileSafeIn(ss.str(), fimu);
 
 	OBSgnss.readEpoch(fst_pos);
 	read_imu(); //fill OBSimu
@@ -699,7 +978,9 @@ void Loosely::init_imu(gnss_sol_t fst_pos){
 	_epochTime = _epochGNSS;
 
 	// Initial Position in Geodetic and ENU
-	_LLH_o = ecef2geo(_ECEF_o);	
+	Vector3d h;
+	h << _ECEF_o.at(0), _ECEF_o.at(1), _ECEF_o.at(2);
+	_LLH_o = eigVector2std(ecef2geo(h));	
 
 	IMU_INI_TIME_END = _epochIMU+imu_init_epochs; // Time taken to initialize the imu  (first imu epoch + 300) (for example)
 }
