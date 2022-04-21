@@ -31,6 +31,8 @@ extern double psd_ba;
 extern int sample_rate;
 extern int imu_init_epochs;//in seconds
 extern int imu_drift; //in seconds
+extern char rtk_port_rtkrcv[6];
+extern char ppp_port_rtkrcv[6];
 
 extern double init_x;
 extern double init_y;

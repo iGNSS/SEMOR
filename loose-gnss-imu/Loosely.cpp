@@ -149,10 +149,16 @@ ReaderGNSS OBSgnss;
 ReaderIMU OBSimu;
 
 Loosely::Loosely(){
+
+
 	init_att_unc << 0.3, 0.3, 0.5;
 	init_vel_unc << 10, 10, 10;
 	init_pos_unc << 30, 30, 30;
 	lever << 0, 0, 0;
+}
+
+void Loosely::close_out_file(){
+	out.close();
 }
 
 
@@ -169,6 +175,9 @@ void read_imu(){
 		while(get_imu_data(buf) == 1){}; //while no imu data or errors reading imu data
 		line = string(buf);
 	}
+
+	out << line << endl;
+	out.flush();
 
 	OBSimu.clearObs();
 	OBSimu.obsEpoch(line);
@@ -565,10 +574,10 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 	//Check if imu is initializing
 	if(imu_ready == 0){
 		while(OBSimu._IMUdata.imuTime < (*int_sol).time.sec){ //read whole imu date of a particular gnss epoch
-			if(imu_ready == 0 && iniIMU.stepInitializeIMU(OBSimu, IMU_INI_TIME_END, _LLH_o) == 1){
+			if(imu_ready == 0 && iniIMU.stepInitializeIMU(OBSimu, IMU_INI_TIME_END, _LLH_o) == 1){ //it calculates _ACCbias and _GYRbias, _RPY
 				_dT = 1.0;
 				// Initialize IMU Mechanization
-				MechECEF.InitializeMechECEF(_ECEF_imu, _LLH_o, GNSSsol.velXYZ, iniIMU._RPY, iniIMU._ACCbias, iniIMU._GYRbias);
+				MechECEF.InitializeMechECEF(_ECEF_imu, _LLH_o, GNSSsol.velXYZ, iniIMU._RPY, iniIMU._ACCbias, iniIMU._GYRbias); //it initializes MechECEF with _ACCbias, _GYRbias and _RPY
 				imu_ready = 1; //Tells client.c that it can read imu data
 				printf("SEMOR: End initialization\n");
 			}
@@ -601,6 +610,10 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 	(*int_sol).a = IMUsol.posXYZ.at(0);
 	(*int_sol).b = IMUsol.posXYZ.at(1);
 	(*int_sol).c = IMUsol.posXYZ.at(2);
+
+	(*int_sol).va = IMUsol.velXYZ.at(0);
+	(*int_sol).vb = IMUsol.velXYZ.at(1);
+	(*int_sol).vc = IMUsol.velXYZ.at(2);
 
 	//STANDARD DEVIATION START
 	if(fst_pos){ //Variance Initialization
@@ -714,7 +727,7 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 		dw0 << -0.004286024305556, -0.024490017361111, 0.126399739583333;*/
 
 		//Debug print
-		printf("AA: %lf %lf %lf\n", va(0), va(1), va(2));
+		//printf("AA: %lf %lf %lf\n", va(0), va(1), va(2));
 		(*int_sol).sda = va(0);
 		(*int_sol).sdb = va(1);
 		(*int_sol).sdc = va(2);
@@ -934,7 +947,7 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 		}
 
 		//Debug print
-		printf("AA: %lf %lf %lf\n", va(0), va(1), va(2));
+		//printf("AA: %lf %lf %lf\n", va(0), va(1), va(2));
 
 		(*int_sol).sda = va(0);
 		(*int_sol).sdb = va(1);
@@ -955,14 +968,19 @@ void Loosely::init_imu(gnss_sol_t fst_pos){
 	printf("SEMOR: Start initialization\n");
 	FileIO FIO;
 
-	out.open("debug.txt");
 
-	stringstream ss;
-	if(relative)
-		ss << "test/tokyo_imu.csv";
-	else
-		ss << root_path << "test/tokyo_imu.csv";
+	stringstream ss, ss1;
+	if(relative){
+		ss << "test/imu.csv";
+		ss1 << "logs/imu_raw.log";
+	}
+	else{
+		ss << root_path << "test/imu.csv";
+		ss1 << root_path << "logs/imu_raw.log";
+	}
 	FIO.fileSafeIn(ss.str(), fimu);
+
+	out.open(ss1.str());
 
 	OBSgnss.readEpoch(fst_pos);
 	read_imu(); //fill OBSimu

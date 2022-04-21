@@ -9,7 +9,7 @@
 
 //Set default configuration
 int relative = 0;
-int logs=0;
+int logs=1;
 int debug=1;
 double init_bg_unc = 2.42406840554768e-05;
 double init_ba_unc = 0.048901633857000000;
@@ -20,6 +20,9 @@ double psd_ba        =     1.66067346797506e-09;
 int sample_rate = 104; //in hz
 int imu_init_epochs =  300;//in seconds
 int imu_drift = 60;
+
+char rtk_port_rtkrcv[6] = "8090";
+char ppp_port_rtkrcv[6] = "8091";
 
 double init_x;
 double init_y;
@@ -49,6 +52,16 @@ void read_conf_line(char line[MAX_LINE]){
     char *token;
     char *eptr;
     token = strtok(line, "#= \t");
+
+    if(strstr(token, "rtkrcv-port-rtk")){
+        strcpy(rtk_port_rtkrcv, strtok(NULL, "#= \t"));
+        return;
+    }
+
+    if(strstr(token, "rtkrcv-port-ppp")){
+        strcpy(ppp_port_rtkrcv, strtok(NULL, "#= \t"));
+        return;
+    }
 
     if(strstr(token, "init-x")){
         init_x = strtod(strtok(NULL, "#= \t"), &eptr);
@@ -223,6 +236,8 @@ int main(int argc, char *argv[]){
         fprintf(f, "rtkrcv-path=%s\n", rtkrcv_path);
         fprintf(f, "rtkconf=%s\n", rtkconf);
         fprintf(f, "pppconf=%s\n", pppconf);
+        fprintf(f, "rtkrcv-port-rtk=%s\n", rtk_port_rtkrcv);
+        fprintf(f, "rtkrcv-port-ppp=%s\n", ppp_port_rtkrcv);
         fprintf(f, "\n#IMU parameters\n");
         fprintf(f, "imu-init-epochs(sec)=%d\n", imu_init_epochs);
         fprintf(f, "imu-drift=%d\n", imu_drift);

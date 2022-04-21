@@ -17,7 +17,7 @@ ReaderGNSS::~ReaderGNSS() {}
 // To clear contents in observation data structure
 void ReaderGNSS::clearObs() {
 	_GNSSdata.Pxyz.setZero(); _GNSSdata.Vxyz.setZero();
-	_GNSSdata.gpsTime = NULL;
+	_GNSSdata.gpsTime = 0;
 }
 
 // This function extracts and stores header information
