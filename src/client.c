@@ -29,13 +29,13 @@
 
 //Solutions
 
-char rtk_port_rtkrcv[6];
-char ppp_port_rtkrcv[6];
+//char rtk_port_rtkrcv[6];
+//char ppp_port_rtkrcv[6];
 
 gnss_sol_t sol[3]; /* GPS=0, GALILEO=1, IMU=2 */
 gnss_sol_t best;
 
-gnss_sol_t init_pos; //initial position for imu initialization
+gnss_sol_t initial_pos; //initial position for imu initialization
 
 FILE* sol_file[3];
 
@@ -82,7 +82,7 @@ void close_semor(int status){
         perror("SEMOR: Error killing rtkrcv(2) process");
     }
     close_ctocpp();
-    if(log){
+    if(logs){
         fclose(sol_file[GPS]);
         fclose(sol_file[GALILEO]);
         fclose(sol_file[IMU]);
@@ -335,8 +335,8 @@ void process_solutions(int* check_sols){
         }
     }
     if(!imu_ready){
-        imu_sol(&init_pos); //this takes 1 second
-        init_pos.time.sec++;
+        imu_sol(&initial_pos); //this takes 1 second
+        initial_pos.time.sec++;
         return;
     }
 
@@ -543,14 +543,14 @@ void handle_connection(){
             int week = ((tv.tv_sec+LEAP_SECONDS-GPS_EPOCH))/(7*24*3600);
             int sec = (double)(((tv.tv_sec+LEAP_SECONDS-GPS_EPOCH))%(7*24*3600))+(tv.tv_usec / 1000000.0);
 
-            init_pos.time.week = week;
-            init_pos.time.sec = sec;
+            initial_pos.time.week = week;
+            initial_pos.time.sec = sec;
 
             if(debug){
-                init_pos.time.sec = seconds;
+                initial_pos.time.sec = seconds;
             }
-            init_imu(init_pos);
-            //init_pos.time.sec++;
+            init_imu(initial_pos);
+            //initial_pos.time.sec++;
             first_time = 0;
         }
 
@@ -568,18 +568,18 @@ void start_processing(void){
     int i;
     char path[3][PATH_MAX];
 
-    //Initialize structure of init_pos
-    init_pos.a = init_x;
-    init_pos.b = init_y;
-    init_pos.c = init_z;
+    //Initialize structure of initial_pos
+    initial_pos.a = init_x;
+    initial_pos.b = init_y;
+    initial_pos.c = init_z;
 
-    init_pos.va = 0;
-    init_pos.vb = 0;
-    init_pos.vc = 0;
+    initial_pos.va = 0;
+    initial_pos.vb = 0;
+    initial_pos.vc = 0;
 
     //DEBUG
-    //init_pos.time.week = 2032;
-    //init_pos.time.sec = 273375;
+    //initial_pos.time.week = 2032;
+    //initial_pos.time.sec = 273375;
 
 
     if(logs){

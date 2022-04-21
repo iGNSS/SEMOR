@@ -3,7 +3,9 @@
 #include <string.h>
 #include <fcntl.h>
 #include <stdlib.h>
-#include "src/semor.h"
+#include <sys/types.h>
+#include <sys/stat.h>
+#include "semor.h"
 
 #define MAX_LINE 256
 
@@ -18,7 +20,7 @@ double psd_acce      =     2.60420170553977e-06;     // acce noise PSD (m^2/s^3)
 double psd_bg        =     2.61160339323310e-14;     // gyro bias random walk PSD (rad^2/s^3)
 double psd_ba        =     1.66067346797506e-09;
 int sample_rate = 104; //in hz
-int imu_init_epochs =  300;//in seconds
+int imu_init_epochs =  20;//in seconds
 int imu_drift = 60;
 
 char rtk_port_rtkrcv[6] = "8090";
@@ -162,7 +164,7 @@ void read_conf_line(char line[MAX_LINE]){
 
 int main(int argc, char *argv[]){
     char cmd;
-    pid_t str2str_pid, rtkrcv1_pid, rtkrcv2_pid;
+    //pid_t str2str_pid, rtkrcv1_pid, rtkrcv2_pid;
     int isset_first_pos;
     int imu_ready;
 
@@ -312,9 +314,19 @@ int main(int argc, char *argv[]){
         fclose(pids);
 
     }
+
+    struct stat st = {0};
+
+
+    sprintf(semor_conf_path, "%slogs", root_path);
+    if (stat(semor_conf_path, &st) == -1) {
+        mkdir(semor_conf_path, 0777);
+    }
+
     /*
     Semor starts here
     */
+   
 
     printf("\n");
     printf("SEMOR: press q to stop\n");
