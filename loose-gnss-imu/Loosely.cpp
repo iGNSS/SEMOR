@@ -176,9 +176,13 @@ void read_imu(){
 		line = string(buf);
 	}
 
-	out << line << endl;
-	out.flush();
+	if(logs){
+		out << line << endl;
+		out.flush();
+	}
 
+	//cout << line << endl;
+	//cout.flush();
 	OBSimu.clearObs();
 	OBSimu.obsEpoch(line);
 }
@@ -584,6 +588,7 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 			read_imu();
 			if(imu_ready){
 				_epochIMU = OBSimu._IMUdata.imuTime;
+				(*int_sol).time.week = OBSimu._IMUdata.week;
 			}
 		}
 		return;
@@ -980,7 +985,8 @@ void Loosely::init_imu(gnss_sol_t fst_pos){
 	}
 	FIO.fileSafeIn(ss.str(), fimu);
 
-	out.open(ss1.str());
+	if(logs)
+		out.open(ss1.str());
 
 	OBSgnss.readEpoch(fst_pos);
 	read_imu(); //fill OBSimu

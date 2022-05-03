@@ -53,34 +53,39 @@ void read_conf_line(char line[MAX_LINE]){
     int i;
     char *token;
     char *eptr;
-    token = strtok(line, "#= \t");
+    char delim[8] = "$= \t";
+    token = strtok(line, delim);
 
     if(strstr(token, "rtkrcv-port-rtk")){
-        strcpy(rtk_port_rtkrcv, strtok(NULL, "#= \t"));
+        strcpy(rtk_port_rtkrcv, strtok(NULL, delim));
+        if(rtk_port_rtkrcv[strlen(rtk_port_rtkrcv)-1] == '\n')
+            rtk_port_rtkrcv[strlen(rtk_port_rtkrcv)-1] = '\0';
         return;
     }
 
     if(strstr(token, "rtkrcv-port-ppp")){
-        strcpy(ppp_port_rtkrcv, strtok(NULL, "#= \t"));
+        strcpy(ppp_port_rtkrcv, strtok(NULL, delim));
+        if(ppp_port_rtkrcv[strlen(ppp_port_rtkrcv)-1] == '\n')
+            ppp_port_rtkrcv[strlen(ppp_port_rtkrcv)-1] = '\0';
         return;
     }
 
     if(strstr(token, "init-x")){
-        init_x = strtod(strtok(NULL, "#= \t"), &eptr);
+        init_x = strtod(strtok(NULL, delim), &eptr);
         if(init_x != 0){
             init_pos |= 1;
         }
         return;
     }
     if(strstr(token, "init-y")){
-        init_y = strtod(strtok(NULL, "#= \t"), &eptr);
+        init_y = strtod(strtok(NULL, delim), &eptr);
         if(init_y != 0){
             init_pos |= 2;
         }
         return;
     }
     if(strstr(token, "init-z")){
-        init_z = strtod(strtok(NULL, "#= \t"), &eptr);
+        init_z = strtod(strtok(NULL, delim), &eptr);
         if(init_z != 0){
             init_pos |= 4;
         }
@@ -88,76 +93,90 @@ void read_conf_line(char line[MAX_LINE]){
     }
 
     if(strstr(token, "imu-drift")){
-        imu_drift = atoi(strtok(NULL, "#= \t"));
+        imu_drift = atoi(strtok(NULL, delim));
         return;
     }
     
     if(strstr(token, "debug")){
-        debug = atoi(strtok(NULL, "#= \t"));
+        debug = atoi(strtok(NULL, delim));
         return;
     }
     if(strstr(token, "logs")){
-        logs = atoi(strtok(NULL, "#= \t"));
+        logs = atoi(strtok(NULL,delim));
         return;
     }
     if(strstr(token, "str2str-in")){
-        strcpy(str2str_in, strtok(NULL, "#= \t"));
+        strcpy(str2str_in, strtok(NULL, delim));
+        if(str2str_in[strlen(str2str_in)-1] == '\n')
+            str2str_in[strlen(str2str_in)-1] = '\0';
         return;
     }
     if(strstr(token, "str2str-out1-port")){
-        strcpy(str2str_out1_port, strtok(NULL, "#= \t"));
+        strcpy(str2str_out1_port, strtok(NULL, delim));
+        if(str2str_out1_port[strlen(str2str_out1_port)-1] == '\n')
+            str2str_out1_port[strlen(str2str_out1_port)-1] = '\0';
         return;
     }
     if(strstr(token, "str2str-out2-port")){
-        strcpy(str2str_out2_port, strtok(NULL, "#= \t"));
+        strcpy(str2str_out2_port, strtok(NULL, delim));
+        if(str2str_out2_port[strlen(str2str_out2_port)-1] == '\n')
+            str2str_out2_port[strlen(str2str_out2_port)-1] = '\0';
         return;
     }
     if(strstr(token, "str2str-path")){
-        strcpy(str2str_path, strtok(NULL, "#= \t"));
+        strcpy(str2str_path, strtok(NULL, delim));
+        if(str2str_path[strlen(str2str_path)-1] == '\n')
+            str2str_path[strlen(str2str_path)-1] = '\0';
         return;
     }
     if(strstr(token, "rtkrcv-path")){
-        strcpy(rtkrcv_path, strtok(NULL, "#= \t"));
+        strcpy(rtkrcv_path, strtok(NULL, delim));
+        if(rtkrcv_path[strlen(rtkrcv_path)-1] == '\n')
+            rtkrcv_path[strlen(rtkrcv_path)-1] = '\0';
         return;
     }
     if(strstr(token, "rtkconf")){
-        strcpy(rtkconf, strtok(NULL, "#= \t"));
+        strcpy(rtkconf, strtok(NULL, delim));
+        if(rtkconf[strlen(rtkconf)-1] == '\n')
+            rtkconf[strlen(rtkconf)-1] = '\0';
         return;
     }
     if(strstr(token, "pppconf")){
-        strcpy(pppconf, strtok(NULL, "#= \t"));
+        strcpy(pppconf, strtok(NULL, delim));
+        if(pppconf[strlen(pppconf)-1] == '\n')
+            pppconf[strlen(pppconf)-1] = '\0';
         return;
     }
     if(strstr(token, "sample-rate")){
-        sample_rate = atoi(strtok(NULL, "#= \t"));
+        sample_rate = atoi(strtok(NULL, delim));
         return;
     }
     if(strstr(token, "imu-init-epochs")){
-        imu_init_epochs = atoi(strtok(NULL, "#= \t"));
+        imu_init_epochs = atoi(strtok(NULL, delim));
         return;
     }
     if(strstr(token, "init-bg-unc")){
-        init_bg_unc = strtod(strtok(NULL, "#= \t"), &eptr);
+        init_bg_unc = strtod(strtok(NULL, delim), &eptr);
         return;
     }
     if(strstr(token, "init-ba-unc")){
-        init_ba_unc = strtod(strtok(NULL, "#= \t"), &eptr);
+        init_ba_unc = strtod(strtok(NULL, delim), &eptr);
         return;
     }
     if(strstr(token, "psd-gyro")){
-        psd_gyro = strtod(strtok(NULL, "#= \t"), &eptr);
+        psd_gyro = strtod(strtok(NULL, delim), &eptr);
         return;
     }
     if(strstr(token, "psd-acce")){
-        psd_acce = strtod(strtok(NULL, "#= \t"), &eptr);
+        psd_acce = strtod(strtok(NULL, delim), &eptr);
         return;
     }
     if(strstr(token, "psd-bg")){
-        psd_bg = strtod(strtok(NULL, "#= \t"), &eptr);
+        psd_bg = strtod(strtok(NULL, delim), &eptr);
         return;
     }
     if(strstr(token, "psd-ba")){
-        psd_ba = strtod(strtok(NULL, "#= \t"), &eptr);
+        psd_ba = strtod(strtok(NULL, delim), &eptr);
         return;
     }
 }
@@ -176,7 +195,7 @@ int main(int argc, char *argv[]){
     char pids_file[PATH_MAX];
 
     char path[60];
-    if(argc == 2 && argv[0] == '-' && argv[1] == 'r'){
+    /*if(argc == 2 && argv[1][0] == '-' && argv[1][1] == 'r'){
         relative = 1;
         sprintf(str2str_path, "RTKLIB-b34e/app/consapp/str2str/gcc/str2str");
         sprintf(rtkrcv_path, "RTKLIB-b34e/app/consapp/rtkrcv/gcc/rtkrcv");
@@ -184,8 +203,8 @@ int main(int argc, char *argv[]){
         sprintf(pppconf, "conf/ppp4pid_navcast.conf");
         sprintf(semor_conf_path, "bin/semor.conf");
         sprintf(pids_file, "pids.txt");
-    }
-    else{
+    }*/
+    {
         sprintf(path, "/proc/%d/exe", getpid());
         if(readlink(path, root_path, PATH_MAX) == -1){
             perror("SEMOR: readlink()");
@@ -228,9 +247,9 @@ int main(int argc, char *argv[]){
         // create file and use default parameters
         f = fopen(semor_conf_path, "w");
 
-        fprintf(f, "#General\n");
-        fprintf(f, "debug=%d   #0:disabled (get realtime data from rtkrcv and imu), 1:enabled (get data from files (in test folder))\n", debug);
-        fprintf(f, "logs=%d   #0:disabled, 1:enabled\n", logs);
+        fprintf(f, "$General\n");
+        fprintf(f, "debug=%d   $0:disabled (get realtime data from rtkrcv and imu), 1:enabled (get data from files (in test folder))\n", debug);
+        fprintf(f, "logs=%d   $0:disabled, 1:enabled\n", logs);
         fprintf(f, "str2str-path=%s\n", str2str_path);
         fprintf(f, "str2str-in=%s\n", str2str_in);
         fprintf(f, "str2str-out1-port=%s\n", str2str_out1_port);
@@ -240,7 +259,7 @@ int main(int argc, char *argv[]){
         fprintf(f, "pppconf=%s\n", pppconf);
         fprintf(f, "rtkrcv-port-rtk=%s\n", rtk_port_rtkrcv);
         fprintf(f, "rtkrcv-port-ppp=%s\n", ppp_port_rtkrcv);
-        fprintf(f, "\n#IMU parameters\n");
+        fprintf(f, "\n$IMU parameters\n");
         fprintf(f, "imu-init-epochs(sec)=%d\n", imu_init_epochs);
         fprintf(f, "imu-drift=%d\n", imu_drift);
         fprintf(f, "sample-rate(hz)=%d\n", sample_rate);
@@ -250,7 +269,7 @@ int main(int argc, char *argv[]){
         fprintf(f, "psd-acce=%.15g\n", psd_acce);
         fprintf(f, "psd-bg=%.15g\n", psd_bg);
         fprintf(f, "psd-ba=%.15g\n", psd_ba);
-        fprintf(f, "#Initialization coordinates\n", psd_ba);
+        fprintf(f, "$Initialization coordinates\n", psd_ba);
         fprintf(f, "init-x=0\n");
         fprintf(f, "init-y=0\n");
         fprintf(f, "init-z=0\n");

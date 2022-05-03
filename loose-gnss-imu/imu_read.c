@@ -292,6 +292,7 @@ uint32_t last_stamp = 0;
 int week;
 double sec = 0;
 int first_read = 1;
+int need_setup = 1;
 
 int setup(){
 	//	open /dev/i2c-1 and set slave address
@@ -383,8 +384,9 @@ int setup(){
 	#endif
 
 int get_imu_data(char line[IMU_LENGTH]){
-	if(first_read){
+	if(need_setup){
 		setup();
+		need_setup = 0;
 	}
 
 	i2c_buf[0] = FIFO_STATUS1;
@@ -440,20 +442,25 @@ int get_imu_data(char line[IMU_LENGTH]){
 			gettimeofday(&tv, NULL);
 			week = ((tv.tv_sec+LEAP_SECONDS-GPS_EPOCH))/(7*24*3600);
 			sec = (double)(((tv.tv_sec+LEAP_SECONDS-GPS_EPOCH))%(7*24*3600))+(tv.tv_usec / 1000000.0);
+			first_read = 0;
 		}
 		else{
-			sec += (stamp-last_stamp) * 25;
+			sec += (stamp-last_stamp) * 0.000025;
 		}
 		sprintf(line, "%d %lf %7.4f %7.4f %7.4f %8.3f %8.3f %8.3f", week,
 			sec,
 			/*ax,ay,az, gx,gy,gz,*/
 			ax*acclUnits, ay*acclUnits, az*acclUnits,
 			gx*gyroUnits, gy*gyroUnits, gz*gyroUnits);
+		
+		last_stamp = stamp;
+
 		return 0;
 
 		//printf("%10u: %6d %6d %6d | %6d %6d %6d || %7.4f %7.4f %7.4f | %8.3f %8.3f %8.3f\n",
 
 	}
+	return 1;
 }
 
 int prova()

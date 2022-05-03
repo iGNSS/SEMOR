@@ -1,5 +1,4 @@
 #include "semor.h"
-#include <pthread.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
@@ -53,9 +52,6 @@ int seconds;
 int n_imu; //how many times the imu solution has been used consecutively
 
 int first_time = 1;
-
-
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
 LocData_t get_data(){ //SiConsulting
     LocData_t data;
@@ -165,34 +161,6 @@ void print_solution(int sol_index){
     gnss2str(sol1, sol[sol_index]);
     fprintf(sol_file[sol_index], "%s\n", (sol[sol_index].time.week == 0) ? "no data" : sol1);
     fflush(sol_file[sol_index]);
-}
-
-int read_gnss(int fd, int* offset, char buf[MAXSTR]){
-    int nbytes = 0;
-
-    if(debug){
-        do{
-            nbytes = read(fd, buf+*offset, 1);
-            if(nbytes == -1){
-                perror("SEMOR read socket");
-                close_semor(1);
-            }else if(nbytes == 0){ // Rtkrcv1 is down
-                printf("nothing to read\n"); //debug
-                continue;
-            }
-            (*offset)++;
-        }while(buf[(*offset)-1] != '\r' && buf[(*offset)-1] != '\n');
-    }else{
-        if ((nbytes = recv(fd, buf + *offset, /*(sizeof buf)*/ strlen(buf)-*offset, 0)) < 0) {
-            if(errno != EAGAIN){
-                perror("read");
-                close_semor(1);
-            }
-        }
-        *offset = *offset+nbytes;
-    }
-
-    return nbytes;
 }
 
 int similar_pos(gnss_sol_t p1, gnss_sol_t p2){
@@ -335,8 +303,8 @@ void process_solutions(int* check_sols){
         }
     }
     if(!imu_ready){
-        imu_sol(&initial_pos); //this takes 1 second
-        initial_pos.time.sec++;
+        imu_sol(&sol[IMU]); //this takes 1 second
+        sol[IMU].time.sec++;
         return;
     }
 
@@ -436,30 +404,61 @@ void setup_tcp_socket(int* fd, char port[6]){
     hints.ai_flags = AI_PASSIVE;
     hints.ai_family = AF_INET; 
 
+    
+    if ((status = getaddrinfo(NULL, port, &hints, &res)) != 0) {
+        fprintf(stderr, "SEMOR: getaddrinfo: %s\n", gai_strerror(status));
+        close_semor(1);
+    }
+    *fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    
+    if(*fd == -1){
+        perror("SEMOR socket()");
+        close_semor(1);
+    }
+
     int flags = fcntl(*fd, F_GETFL, 0);
 
     if(fcntl(*fd, F_SETFL, flags | O_NONBLOCK) == -1){
         perror("SEMOR: can't set non blocking socket()");
         close_semor(1);
     }
-    
-    if ((status = getaddrinfo(NULL, rtk_port_rtkrcv, &hints, &res)) != 0) {
-        fprintf(stderr, "SEMOR: getaddrinfo: %s\n", gai_strerror(status));
-        close_semor(1);
-    }
-    *fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-    if(*fd == -1){
-        perror("SEMOR socket()");
-        close_semor(1);
-    }
+
     do{
-        if(connect(*fd, res->ai_addr, res->ai_addrlen) == -1){
-            if(errno == ECONNREFUSED) continue; //Wait for rtkrcv to start and to send data
+        connect(*fd, res->ai_addr, res->ai_addrlen);
+        if(errno != EISCONN){ //(errno == ECONNREFUSED || errno == EAGAIN || errno == EINPROGRESS || errno == EALREADY)
+            continue; //Wait for rtkrcv to start and to send data
         }
         break; //Stop while
     }while(1);
 
     free(res);
+}
+
+int read_gnss(int fd, int* offset, char* buf, int buf_length){
+    int nbytes = 0;
+
+    if(debug){
+        do{
+            nbytes = read(fd, buf+*offset, 1);
+            if(nbytes == -1){
+                perror("SEMOR read file");
+                close_semor(1);
+            }else if(nbytes == 0){ // Nothing to read
+                continue;
+            }
+            (*offset)++;
+        }while(buf[(*offset)-1] != '\r' && buf[(*offset)-1] != '\n');
+    }else{
+        if ((nbytes = recv(fd, buf + *offset, buf_length - *offset, 0)) < 0) { //(sizeof buf) /*strlen(buf)*/-*offset
+            if(errno != EAGAIN && errno != EWOULDBLOCK && errno != ECONNREFUSED){
+                perror("SEMOR: read");
+                close_semor(1);
+            }
+        }
+    *offset = *offset+nbytes;
+    }
+
+    return nbytes;
 }
 
 void handle_connection(){
@@ -477,6 +476,7 @@ void handle_connection(){
     int check_sols = 0; //3 if both rtk and ppp are read, 1 if only rtk read, 2 if only ppp and 0 if none
     int galileo_ready = 0;
     int new_gnss_data = 0;
+    int first_input = 0;
     
     //Initialize input file descriptors
     if(debug){
@@ -512,21 +512,46 @@ void handle_connection(){
             check_termination(); //Check if user requested the termination of the process
         }
         for(i = 0; i < 2; i++){ //Get GPS and GALILEO solutions
-        usleep(150000); //gives time to the solutions to be read (if one of them is late)
+            offset[i] = 0;
+                //strcpy(buf[i], "");
+                //memset(buf[i], 0, sizeof buf);
+                //strncpy(dest_string,"",strlen(dest_string));
+            usleep(150000); //gives time to the solutions to be read (if one of them is late)
             if(fds[i].revents & POLLIN){
                 if(debug && wait_read[i]){ //Don't read solution i (0:GPS, 1:GALILEO) if the solution in the previous iterations has a higher epoch than "seconds" variable
                     continue;
                 }
-                read_gnss(socketfd[i], &offset[i], buf[i]);
-                if(offset[i] != 0 && buf[i][offset[i]-1] == '\r' || buf[i][offset[i]-1] == '\n'){ //If incoming data is a full gnss measurement string
+                nbytes = read_gnss(socketfd[i], &offset[i], buf[i], sizeof buf[i]);
+
+                if(strstr(buf[i], "lat") || strstr(buf[i], "latitude") || strstr(buf[i], "ecef") || strlen(buf[i]) < 5){ //Check if the input string contains gnss data or if it is an empty line or header
+                    offset[i] = 0;
+                    //strcpy(buf[i], "");
+                    //memset(buf[tmp], 0, sizeof buf);
+                    for(int j=0; j<MAXSTR;j++){
+                        buf[i][j] = 0;
+                    }
+                    continue;
+                }
+
+                printf("%s\n\n", buf[i]);
+                if(offset[i] != 0 && (buf[i][offset[i]-1] == '\r' || buf[i][offset[i]-1] == '\n')){ //If incoming data is a full gnss measurement string
                     buf[i][offset[i]-1] = '\0'; //Replace new line with end of string
                     offset[i] = 0; //Reset offset for next reads
-                    if(!(strstr(buf[i], "lat") || strstr(buf[i], "latitude") || strlen(buf[i]) < 5)){ //Check if the input string contains gnss data or if it is an empty line or header
-                        check_sols |= i+1;
-                    }
+                    check_sols |= i+1;
+                    //printf("%s\n", buf[i]);
+                    first_input = 1;
                     sol[i] = str2gnss(buf[i]);//Parse string to gnss_sol_t structure
+                    //strcpy(buf[i], "");
+                    //memset(buf[tmp], 0, sizeof buf);
+                    for(int j=0; j<MAXSTR;j++){
+                        buf[i][j] = 0;
+                    }
                 }
             }
+        }
+
+        if(!first_input){
+            continue;
         }
 
         if(1){ //if(debug)
@@ -543,13 +568,13 @@ void handle_connection(){
             int week = ((tv.tv_sec+LEAP_SECONDS-GPS_EPOCH))/(7*24*3600);
             int sec = (double)(((tv.tv_sec+LEAP_SECONDS-GPS_EPOCH))%(7*24*3600))+(tv.tv_usec / 1000000.0);
 
-            initial_pos.time.week = week;
-            initial_pos.time.sec = sec;
+            sol[IMU].time.week = week;
+            sol[IMU].time.sec = sec;
 
             if(debug){
-                initial_pos.time.sec = seconds;
+                sol[IMU].time.sec = seconds;
             }
-            init_imu(initial_pos);
+            init_imu(sol[IMU]);
             //initial_pos.time.sec++;
             first_time = 0;
         }
@@ -569,13 +594,13 @@ void start_processing(void){
     char path[3][PATH_MAX];
 
     //Initialize structure of initial_pos
-    initial_pos.a = init_x;
-    initial_pos.b = init_y;
-    initial_pos.c = init_z;
+    sol[IMU].a = init_x;
+    sol[IMU].b = init_y;
+    sol[IMU].c = init_z;
 
-    initial_pos.va = 0;
-    initial_pos.vb = 0;
-    initial_pos.vc = 0;
+    sol[IMU].va = 0;
+    sol[IMU].vb = 0;
+    sol[IMU].vc = 0;
 
     //DEBUG
     //initial_pos.time.week = 2032;
