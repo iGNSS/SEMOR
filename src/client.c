@@ -167,36 +167,36 @@ int similar_pos(gnss_sol_t p1, gnss_sol_t p2){
 
     //Check a
     if(p1.a < p2.a){
-        if(!(p1.a+3*p1.sda > p2.a-3*p2.sda)){
+        if(p1.a+3*p1.sda < p2.a-3*p2.sda){
             return 0;
         }
     }
     else{
-        if(!(p2.a+3*p2.sda > p1.a-3*p1.sda)){
+        if(p2.a+3*p2.sda < p1.a-3*p1.sda){
             return 0;
         }
     }
 
     //Check b
     if(p1.b < p2.b){
-        if(!(p1.b+3*p1.sdb > p2.b-3*p2.sdb)){
+        if(p1.b+3*p1.sdb < p2.b-3*p2.sdb){
             return 0;
         }
     }
     else{
-        if(!(p2.b+3*p2.sdb > p1.b-3*p1.sdb)){
+        if(p2.b+3*p2.sdb < p1.b-3*p1.sdb){
             return 0;
         }
     }
 
     //Check c
     if(p1.c < p2.c){
-        if(!(p1.c+3*p1.sdc > p2.c-3*p2.sdc)){
+        if(p1.c+3*p1.sdc < p2.c-3*p2.sdc){
             return 0;
         }
     }
     else{
-        if(!(p2.c+3*p2.sdc > p1.c-3*p1.sdc)){
+        if(p2.c+3*p2.sdc < p1.c-3*p1.sdc){
             return 0;
         }
     }
@@ -277,8 +277,7 @@ int get_best_sol_3(){ //if 3 solutions available - 0: no best found, 1: best fou
     return 0;
 }
 
-void process_solutions(int* check_sols){
-    int chk_sols = *check_sols;
+void process_solutions(int chk_sols){
     int i;
     int is_best_found = 1;
 
@@ -342,10 +341,13 @@ void process_solutions(int* check_sols){
             break;
         case 7: //all solutions available
             is_best_found = get_best_sol_3();
+            printf("3 avg: %d - ", is_best_found);
             best.time.week = sol[GPS].time.week;
             best.time.sec = sol[GPS].time.sec;
             break;
     }
+
+    printf("%d\n", chk_sols);
     
 
     if(logs && imu_ready){
@@ -378,6 +380,10 @@ void process_solutions(int* check_sols){
     if(!is_best_found && chk_sols < 4){ //no best solution and no imu solution
         //TODO
     }
+
+    //Flag solutions as already used
+    sol[GPS].time.week = 0;
+    sol[GALILEO].time.week = 0;
 
     //Post comparison and output
     //So let's generate the next imu position
@@ -516,7 +522,8 @@ void handle_connection(){
                 //strcpy(buf[i], "");
                 //memset(buf[i], 0, sizeof buf);
                 //strncpy(dest_string,"",strlen(dest_string));
-            usleep(150000); //gives time to the solutions to be read (if one of them is late)
+            //usleep(150000); //gives time to the solutions to be read (if one of them is late)
+            ret = poll(fds, 3, timeout_msecs);
             if(fds[i].revents & POLLIN){
                 if(debug && wait_read[i]){ //Don't read solution i (0:GPS, 1:GALILEO) if the solution in the previous iterations has a higher epoch than "seconds" variable
                     continue;
@@ -533,13 +540,12 @@ void handle_connection(){
                     continue;
                 }
 
-                printf("%s\n\n", buf[i]);
                 if(offset[i] != 0 && (buf[i][offset[i]-1] == '\r' || buf[i][offset[i]-1] == '\n')){ //If incoming data is a full gnss measurement string
                     buf[i][offset[i]-1] = '\0'; //Replace new line with end of string
-                    offset[i] = 0; //Reset offset for next reads
+                    //offset[i] = 0; //Reset offset for next reads
                     check_sols |= i+1;
                     //printf("%s\n", buf[i]);
-                    first_input = 1;
+                    first_input |= i+1;
                     sol[i] = str2gnss(buf[i]);//Parse string to gnss_sol_t structure
                     //strcpy(buf[i], "");
                     //memset(buf[tmp], 0, sizeof buf);
@@ -550,11 +556,11 @@ void handle_connection(){
             }
         }
 
-        if(!first_input){
+        if(first_input < 3){
             continue;
         }
 
-        if(1){ //if(debug)
+        if(debug){
             if(seconds == 0){
                 seconds = (sol[GPS].time.sec <= sol[GALILEO].time.sec) ? sol[GPS].time.sec : sol[GALILEO].time.sec; //Set current second to the minimum of the epochs of the 2 gnss solution
             }
@@ -579,7 +585,7 @@ void handle_connection(){
             first_time = 0;
         }
 
-        process_solutions(&check_sols); //Get best solution, output it and use it to calculate next imu position
+        process_solutions(check_sols); //Get best solution, output it and use it to calculate next imu position
 
         if(debug)
             seconds++; //Update current second
