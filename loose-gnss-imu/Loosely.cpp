@@ -970,7 +970,6 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 }
 
 void Loosely::init_imu(gnss_sol_t fst_pos){
-	printf("SEMOR: Start initialization\n");
 	FileIO FIO;
 
 

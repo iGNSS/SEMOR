@@ -341,13 +341,11 @@ void process_solutions(int chk_sols){
             break;
         case 7: //all solutions available
             is_best_found = get_best_sol_3();
-            printf("3 avg: %d - ", is_best_found);
             best.time.week = sol[GPS].time.week;
             best.time.sec = sol[GPS].time.sec;
             break;
     }
 
-    printf("%d\n", chk_sols);
     
 
     if(logs && imu_ready){
@@ -483,6 +481,8 @@ void handle_connection(){
     int galileo_ready = 0;
     int new_gnss_data = 0;
     int first_input = 0;
+
+    printf("SEMOR: Start initialization. Please wait...\n");
     
     //Initialize input file descriptors
     if(debug){
@@ -509,6 +509,7 @@ void handle_connection(){
 
     while(1){
         check_sols = 0;
+        //usleep(300000);
         ret = poll(fds, 3, timeout_msecs); //wait for events on the 3 fds
         if (ret == -1){
             perror("SEMOR: poll");
@@ -522,9 +523,9 @@ void handle_connection(){
                 //strcpy(buf[i], "");
                 //memset(buf[i], 0, sizeof buf);
                 //strncpy(dest_string,"",strlen(dest_string));
-            //usleep(150000); //gives time to the solutions to be read (if one of them is late)
-            ret = poll(fds, 3, timeout_msecs);
-            if(fds[i].revents & POLLIN){
+            usleep(150000); //gives time to the solutions to be read (if one of them is late)
+            //ret = poll(fds, 3, timeout_msecs);
+            if(1/*fds[i].revents & POLLIN*/){
                 if(debug && wait_read[i]){ //Don't read solution i (0:GPS, 1:GALILEO) if the solution in the previous iterations has a higher epoch than "seconds" variable
                     continue;
                 }
