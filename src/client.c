@@ -302,6 +302,7 @@ void process_solutions(int chk_sols){
         }
     }
     if(!imu_ready){
+        gnsscopy(&sol[IMU], sol[GPS]);
         imu_sol(&sol[IMU]); //this takes 1 second
         sol[IMU].time.sec++;
         return;

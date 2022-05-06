@@ -13,6 +13,8 @@ using namespace Eigen;
 
 ofstream out;
 
+int first = 1;
+
 // PI
 const double PI = 3.1415926535898;
 
@@ -574,52 +576,7 @@ Vector3d xyz2blh(Vector3d xyz){
 	return blh;
 }
 
-void Loosely::get_imu_sol(gnss_sol_t* int_sol){
-	//Check if imu is initializing
-	if(imu_ready == 0){
-		while(OBSimu._IMUdata.imuTime < (*int_sol).time.sec){ //read whole imu date of a particular gnss epoch
-			if(imu_ready == 0 && iniIMU.stepInitializeIMU(OBSimu, IMU_INI_TIME_END, _LLH_o) == 1){ //it calculates _ACCbias and _GYRbias, _RPY
-				_dT = 1.0;
-				// Initialize IMU Mechanization
-				MechECEF.InitializeMechECEF(_ECEF_imu, _LLH_o, GNSSsol.velXYZ, iniIMU._RPY, iniIMU._ACCbias, iniIMU._GYRbias); //it initializes MechECEF with _ACCbias, _GYRbias and _RPY
-				imu_ready = 1; //Tells client.c that it can read imu data
-				printf("SEMOR: End initialization\n");
-			}
-			read_imu();
-			if(imu_ready){
-				_epochIMU = OBSimu._IMUdata.imuTime;
-				(*int_sol).time.week = OBSimu._IMUdata.week;
-			}
-		}
-		return;
-	}
-	//IMU is ready:
-
-	//Initialize IMU mechanization with initial position, initial velocity and biases
-	_ECEF_o = eigVector2std(double2eigVector((*int_sol).a, (*int_sol).b, (*int_sol).c));
-	_LLH_o = eigVector2std(ecef2geo(double2eigVector((*int_sol).a, (*int_sol).b, (*int_sol).c)));	
-	_ECEF_imu = _ECEF_o;
-	GNSSsol.velXYZ = eigVector2std(double2eigVector((*int_sol).va, (*int_sol).vb, (*int_sol).vc));
-	MechECEF.InitializeMechECEF(_ECEF_imu, _LLH_o, GNSSsol.velXYZ, iniIMU._RPY, iniIMU._ACCbias, iniIMU._GYRbias);
-	do {
-		read_imu();
-
-		// Process IMU
-		SolutionIMU(OBSimu, MechECEF);				//Get position from current MechECEF state and IMU data just read - This has effects on: MechECEF e IMUsol
-
-		//Update Time
-		_epochIMU = OBSimu._IMUdata.imuTime;
-	} while (_epochIMU <= (*int_sol).time.sec);
-
-	//Return imu solution
-	(*int_sol).a = IMUsol.posXYZ.at(0);
-	(*int_sol).b = IMUsol.posXYZ.at(1);
-	(*int_sol).c = IMUsol.posXYZ.at(2);
-
-	(*int_sol).va = IMUsol.velXYZ.at(0);
-	(*int_sol).vb = IMUsol.velXYZ.at(1);
-	(*int_sol).vc = IMUsol.velXYZ.at(2);
-
+void calculateSTD(gnss_sol_t* int_sol){
 	//STANDARD DEVIATION START
 	if(fst_pos){ //Variance Initialization
 		Vector3d geostdpos;
@@ -855,12 +812,16 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 		gnss_posP(3), gnss_posP(1), gnss_posP(4),
 		gnss_posP(5), gnss_posP(4), gnss_posP(2);
 
+		print(Pp);
+
 		if(Pp.diagonal().maxCoeff()>VAR_POS)
 			rr=Vector3d::Zero();
 		else{
 			Pp=T.inverse()*Pp*T.transpose().inverse();
 			VAR1 << Pp(0,0), Pp(1,1), Pp(2,2);
 		}
+
+		print(VAR1);
 
 		/*Matrix<double, 1, 6> velP=gnss_velP; 
 		Pp << velP(0), velP(3), velP(5),
@@ -878,6 +839,8 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 		}*/
 
 		Vector3d pos_INS=pos+Mpv*Cnb*lever;
+
+		print(pos_INS);
 		//Vector3d vel_INS=vel+Cnb*askew(web)*lever;
 
 		v=pos_INS-pos_GNSS; 
@@ -885,8 +848,14 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 		H=MatrixXd::Zero(3,15);
 		H(0,6)=1;H(1,7)=1;H(2,8)=1;
 
+		print(v);
+		print(R);
+		print(H);
+
 		VectorXd x_pre = x;
 		MatrixXd P_pre = P;
+		print(x_pre);
+		print(P_pre);
 
 		////////////////////// measurement update
 		int nx= 15 /*size(x_pre,1)*/; int stat=1;
@@ -895,20 +864,32 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 		if(Q.determinant()==0)
 			stat=0;
 
+		print(Q);
+
 		MatrixXd K(15, 3); K =P_pre*H.transpose()*Q.inverse();
 		VectorXd xx(15); xx = K*v;
 		P=(MatrixXd::Identity(nx, nx)-K*H)*P_pre;
+
+		print(K);
+
+		print(xx);
+
+		print(P);
 
 		//if(~isreal(xx)||~isreal(P))
 		//	stat=0;
 
 		Vector3d h; h << xx(0), xx(1), xx(2);
 		Cnb = (Matrix3d::Identity()+askew(h))*Cnb;
+
+		print(Cnb);
 		//if ~isreal(Cnb)
 		//	stat=0;
 
 		//Cnb = Cnb;
 		att = Cnb2att(Cnb);
+
+		print(att);
 		Vector3d xx_i;
 		//xx_i << xx(3), xx(4), xx(5);
 		//vel = vel-xx_i;
@@ -919,16 +900,27 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 		xx_i << xx(12), xx(13), xx(14);
 		ba  = ba+xx_i;
 		x  << att, vel, pos, bg, ba;
+
+		print(pos);
+		print(bg);
+		print(ba);
+		print(x);
 		//P = P;
 
 		Vector3d helper; helper << x(6), x(7), x(8);
 		rr=blh2xyz(helper); Dblh2Dxyz(helper);
 		pos=rr.transpose();
 
+		print(rr);
+
+		print(pos);
+
 		helper << x(3), x(4), x(5);
 		//vel=(Cen*helper).transpose();
 		helper << x(0), x(1), x(2);
 		att=helper.transpose()/0.0175;
+
+		print(att);
 
 		if(att(2)>=0)
 			att(2)=360-att(2);
@@ -939,10 +931,15 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 		posvar = initPosvar.array().matrix().asDiagonal(); //blh variance
 
 		posvar=T*posvar*T.transpose();        //blh_var to xyz_var
+
+		print(posvar);
+
 		//velvar=P(4:6,4:6); velvar=Cen*velvar*Cen';    %enu_var to xyz_var
 
 
 		va << posvar(0, 0), posvar(1, 1), posvar(2, 2), posvar(0,1), posvar(1,2), posvar(0,2);
+
+		print(va);
 
 		for(int i = 0; i < 6; i++){
 			if(va(i) < 0)
@@ -963,6 +960,60 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 
 	}
 	//STANDARD DEVIATION END
+}
+
+void Loosely::get_imu_sol(gnss_sol_t* int_sol){
+	//Check if imu is initializing
+	if(imu_ready == 0){
+		while(OBSimu._IMUdata.imuTime < (*int_sol).time.sec){ //read whole imu date of a particular gnss epoch
+			if(imu_ready == 0 && iniIMU.stepInitializeIMU(OBSimu, IMU_INI_TIME_END, _LLH_o) == 1){ //it calculates _ACCbias and _GYRbias, _RPY
+				_dT = 1.0;
+				// Initialize IMU Mechanization
+				MechECEF.InitializeMechECEF(_ECEF_imu, _LLH_o, GNSSsol.velXYZ, iniIMU._RPY, iniIMU._ACCbias, iniIMU._GYRbias); //it initializes MechECEF with _ACCbias, _GYRbias and _RPY
+				imu_ready = 1; //Tells client.c that it can read imu data
+				printf("SEMOR: End initialization\n");
+			}
+			read_imu();
+			if(imu_ready){
+				_epochIMU = OBSimu._IMUdata.imuTime;
+				(*int_sol).time.week = OBSimu._IMUdata.week;
+			}
+		}
+		return;
+	}
+	//IMU is ready:
+
+	//Initialize IMU mechanization with initial position, initial velocity and biases
+	_ECEF_o = eigVector2std(double2eigVector((*int_sol).a, (*int_sol).b, (*int_sol).c));
+	_LLH_o = eigVector2std(ecef2geo(double2eigVector((*int_sol).a, (*int_sol).b, (*int_sol).c)));	
+	_ECEF_imu = _ECEF_o;
+	GNSSsol.velXYZ = eigVector2std(double2eigVector((*int_sol).va, (*int_sol).vb, (*int_sol).vc));
+	if(1){
+		MechECEF.InitializeMechECEF(_ECEF_imu, _LLH_o, GNSSsol.velXYZ, iniIMU._RPY, iniIMU._ACCbias, iniIMU._GYRbias);
+		first = 0;
+	}
+	do {
+		read_imu();
+
+		// Process IMU
+		SolutionIMU(OBSimu, MechECEF);				//Get position from current MechECEF state and IMU data just read - This has effects on: MechECEF e IMUsol
+		//Here we have gnss+acc+gyr
+
+		(*int_sol).a = IMUsol.posXYZ.at(0);
+		(*int_sol).b = IMUsol.posXYZ.at(1);
+		(*int_sol).c = IMUsol.posXYZ.at(2);
+
+		(*int_sol).va = IMUsol.velXYZ.at(0);
+		(*int_sol).vb = IMUsol.velXYZ.at(1);
+		(*int_sol).vc = IMUsol.velXYZ.at(2);
+
+		calculateSTD(int_sol);
+		printf("%f, %f, %f\n", (*int_sol).sda, (*int_sol).sdb, (*int_sol).sdc);
+		//Update Time
+		_epochIMU = OBSimu._IMUdata.imuTime;
+	} while (_epochIMU <= (*int_sol).time.sec);
+
+	//We have position and STD of this epoch
 
 
 	//Mark imu solution as usable for the comparison (in order to get the best solution for SEMOR)
