@@ -812,7 +812,7 @@ void calculateSTD(gnss_sol_t* int_sol){
 		gnss_posP(3), gnss_posP(1), gnss_posP(4),
 		gnss_posP(5), gnss_posP(4), gnss_posP(2);
 
-		print(Pp);
+		//print(Pp);
 
 		if(Pp.diagonal().maxCoeff()>VAR_POS)
 			rr=Vector3d::Zero();
@@ -821,7 +821,7 @@ void calculateSTD(gnss_sol_t* int_sol){
 			VAR1 << Pp(0,0), Pp(1,1), Pp(2,2);
 		}
 
-		print(VAR1);
+		//print(VAR1);
 
 		/*Matrix<double, 1, 6> velP=gnss_velP; 
 		Pp << velP(0), velP(3), velP(5),
@@ -840,7 +840,7 @@ void calculateSTD(gnss_sol_t* int_sol){
 
 		Vector3d pos_INS=pos+Mpv*Cnb*lever;
 
-		print(pos_INS);
+		//print(pos_INS);
 		//Vector3d vel_INS=vel+Cnb*askew(web)*lever;
 
 		v=pos_INS-pos_GNSS; 
@@ -848,14 +848,14 @@ void calculateSTD(gnss_sol_t* int_sol){
 		H=MatrixXd::Zero(3,15);
 		H(0,6)=1;H(1,7)=1;H(2,8)=1;
 
-		print(v);
-		print(R);
-		print(H);
+		//print(v);
+		//print(R);
+		//print(H);
 
 		VectorXd x_pre = x;
 		MatrixXd P_pre = P;
-		print(x_pre);
-		print(P_pre);
+		//print(x_pre);
+		//print(P_pre);
 
 		////////////////////// measurement update
 		int nx= 15 /*size(x_pre,1)*/; int stat=1;
@@ -864,17 +864,17 @@ void calculateSTD(gnss_sol_t* int_sol){
 		if(Q.determinant()==0)
 			stat=0;
 
-		print(Q);
+		//print(Q);
 
 		MatrixXd K(15, 3); K =P_pre*H.transpose()*Q.inverse();
 		VectorXd xx(15); xx = K*v;
 		P=(MatrixXd::Identity(nx, nx)-K*H)*P_pre;
 
-		print(K);
+		//print(K);
 
-		print(xx);
+		//print(xx);
 
-		print(P);
+		//print(P);
 
 		//if(~isreal(xx)||~isreal(P))
 		//	stat=0;
@@ -882,14 +882,14 @@ void calculateSTD(gnss_sol_t* int_sol){
 		Vector3d h; h << xx(0), xx(1), xx(2);
 		Cnb = (Matrix3d::Identity()+askew(h))*Cnb;
 
-		print(Cnb);
+		//print(Cnb);
 		//if ~isreal(Cnb)
 		//	stat=0;
 
 		//Cnb = Cnb;
 		att = Cnb2att(Cnb);
 
-		print(att);
+		//print(att);
 		Vector3d xx_i;
 		//xx_i << xx(3), xx(4), xx(5);
 		//vel = vel-xx_i;
@@ -901,26 +901,26 @@ void calculateSTD(gnss_sol_t* int_sol){
 		ba  = ba+xx_i;
 		x  << att, vel, pos, bg, ba;
 
-		print(pos);
-		print(bg);
-		print(ba);
-		print(x);
+		//print(pos);
+		//print(bg);
+		//print(ba);
+		//print(x);
 		//P = P;
 
 		Vector3d helper; helper << x(6), x(7), x(8);
 		rr=blh2xyz(helper); Dblh2Dxyz(helper);
 		pos=rr.transpose();
 
-		print(rr);
+		//print(rr);
 
-		print(pos);
+		//print(pos);
 
 		helper << x(3), x(4), x(5);
 		//vel=(Cen*helper).transpose();
 		helper << x(0), x(1), x(2);
 		att=helper.transpose()/0.0175;
 
-		print(att);
+		//print(att);
 
 		if(att(2)>=0)
 			att(2)=360-att(2);
@@ -932,14 +932,14 @@ void calculateSTD(gnss_sol_t* int_sol){
 
 		posvar=T*posvar*T.transpose();        //blh_var to xyz_var
 
-		print(posvar);
+		//print(posvar);
 
 		//velvar=P(4:6,4:6); velvar=Cen*velvar*Cen';    %enu_var to xyz_var
 
 
 		va << posvar(0, 0), posvar(1, 1), posvar(2, 2), posvar(0,1), posvar(1,2), posvar(0,2);
 
-		print(va);
+		//print(va);
 
 		for(int i = 0; i < 6; i++){
 			if(va(i) < 0)
@@ -1008,7 +1008,7 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 		(*int_sol).vc = IMUsol.velXYZ.at(2);
 
 		calculateSTD(int_sol);
-		printf("%f, %f, %f\n", (*int_sol).sda, (*int_sol).sdb, (*int_sol).sdc);
+		//printf("%f, %f, %f\n", (*int_sol).sda, (*int_sol).sdb, (*int_sol).sdc);
 		//Update Time
 		_epochIMU = OBSimu._IMUdata.imuTime;
 	} while (_epochIMU <= (*int_sol).time.sec);

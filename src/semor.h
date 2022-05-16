@@ -65,22 +65,22 @@ typedef struct tow{ /* Time Of Week */
 
 typedef struct gnss_solution{ /* a = x | n ,    b = y | e ,     c = z | u*/
     tow_t time;
-    double a;
-    double b;
-    double c;
+    double a; //x
+    double b; //y
+    double c; //z
     short Q;
     short ns;
-    double sda;
-    double sdb;
-    double sdc;
-    double sdab;
-    double sdbc;
-    double sdca;
+    double sda; //sdx
+    double sdb; //sdy
+    double sdc; //sdz
+    double sdab; //sdxy
+    double sdbc; //sdyz
+    double sdca; //sdxz
     float age;
     float ratio;
-    double va;
-    double vb;
-    double vc;
+    double va; //velocity x
+    double vb;//velocity y
+    double vc;//velocity z
 
     //int compared; //If it has no matches for its epoch, it will be printed alone with no comparisons
 } gnss_sol_t;

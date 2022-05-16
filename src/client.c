@@ -12,6 +12,7 @@
 #include <string.h>
 #include <math.h>
 #include <sys/poll.h>
+#include <time.h>
 
 #define DEBUG_FILE 1 //If semor takes data from file
 
@@ -56,9 +57,32 @@ int first_time = 1;
 LocData_t get_data(){ //SiConsulting
     LocData_t data;
 
+    int sec_today, sec_today_utc, h_utc, h, m, s;
+
+    time_t rawtime, ti;
+    struct tm info;
+
     data.dLat = best.a;
     data.dLon = best.b;
     data.dHeigth = best.c;
+
+    data.dSdn = best.sda;
+    data.dSde = best.sdb;
+    data.dSdu = best.sdc;
+
+    sec_today = (best.time.sec-LEAP_SECONDS)%(24*3600); //7200 because GPS is shifted
+
+    /*time( &rawtime );
+    info = *localtime( &rawtime );
+    h_utc = info.tm_hour; */
+
+    h = sec_today/3600;
+	
+	m = (sec_today -(3600*h))/60;
+	
+	s = (sec_today -(3600*h)-(m*60));
+
+    sprintf(data.ui8TS, "%02d:%02d:%02d", h, m, s);
     
     return data;
 }
@@ -375,6 +399,9 @@ void process_solutions(int chk_sols){
 
     //Here we have the solution
     output(best);
+    LocData_t res;
+    res = get_data();
+    printf("%s\n", res.ui8TS);
 
     if(!is_best_found && chk_sols < 4){ //no best solution and no imu solution
         //TODO
