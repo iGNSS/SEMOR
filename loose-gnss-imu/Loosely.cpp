@@ -8,6 +8,11 @@
 #include "pch.h"
 #include "Loosely.h"
 #include "semor.h"
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 using namespace std;
 using namespace Eigen;
 
@@ -1023,15 +1028,24 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 void Loosely::init_imu(gnss_sol_t fst_pos){
 	FileIO FIO;
 
+	time_t rawtime;
+    struct tm info;
+    time( &rawtime );
+    info = *localtime( &rawtime );
+    char str_time[13];
+
+    sprintf(str_time, "%d_%02d_%02d_%02d_%02d", (info.tm_year+1900), (info.tm_mon+1), info.tm_mday, info.tm_hour, info.tm_min);
 
 	stringstream ss, ss1;
 	if(relative){
 		ss << "test/imu.csv";
-		ss1 << "logs/imu_raw.log";
+		ss1 << "logs/logs_" << str_time << "/imu_raw_" << str_time << ".log";
 	}
 	else{
 		ss << root_path << "test/imu.csv";
-		ss1 << root_path << "logs/imu_raw.log";
+		ss1 << root_path << "logs/logs_" << str_time << "/imu_raw_" << str_time << ".log";
+		//cout << ss1.str() << endl;
+		//cout.flush();
 	}
 	FIO.fileSafeIn(ss.str(), fimu);
 

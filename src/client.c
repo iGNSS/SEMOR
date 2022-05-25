@@ -13,6 +13,8 @@
 #include <math.h>
 #include <sys/poll.h>
 #include <time.h>
+#include <sys/stat.h>
+
 
 #define DEBUG_FILE 1 //If semor takes data from file
 
@@ -300,7 +302,34 @@ int get_best_sol_3(){ //if 3 solutions available - 0: no best found, 1: best fou
     }
     return 0;
 }
-
+/*
+void ecef2geo(gnss_sol_t gnss){
+    # --- WGS84 constants
+    a = 6378137.0
+    f = 1.0 / 298.257223563
+    # --- derived constants
+    b = a - f*a
+    e = math.sqrt(math.pow(a,2.0)-math.pow(b,2.0))/a
+    clambda = math.atan2(y,x)
+    p = math.sqrt(pow(x,2.0)+pow(y,2))
+    h_old = 0.0
+    # first guess with h=0 meters
+    theta = math.atan2(z,p*(1.0-math.pow(e,2.0)))
+    cs = math.cos(theta)
+    sn = math.sin(theta)
+    N = math.pow(a,2.0)/math.sqrt(math.pow(a*cs,2.0)+math.pow(b*sn,2.0))
+    h = p/cs - N
+    while abs(h-h_old) > 1.0e-6:
+        h_old = h
+        theta = math.atan2(z,p*(1.0-math.pow(e,2.0)*N/(N+h)))
+        cs = math.cos(theta)
+        sn = math.sin(theta)
+        N = math.pow(a,2.0)/math.sqrt(math.pow(a*cs,2.0)+math.pow(b*sn,2.0))
+        h = p/cs - N
+    llh = {'lon':clambda, 'lat':theta, 'height': h}
+    return llh
+}
+*/
 void process_solutions(int chk_sols){
     int i;
     int is_best_found = 1;
@@ -398,10 +427,13 @@ void process_solutions(int chk_sols){
     }
 
     //Here we have the solution
+
+    //Convert the position from ecef to geodetic
+    //ecef2geo(&best);
     output(best);
     LocData_t res;
     res = get_data();
-    printf("%s\n", res.ui8TS);
+    //printf("%s\n", res.ui8TS);
 
     if(!is_best_found && chk_sols < 4){ //no best solution and no imu solution
         //TODO
@@ -641,18 +673,34 @@ void start_processing(void){
     //initial_pos.time.week = 2032;
     //initial_pos.time.sec = 273375;
 
+    time_t rawtime;
+    struct tm info;
+    time( &rawtime );
+    info = *localtime( &rawtime );
+    char str_time[13];
+
+    sprintf(str_time, "%d_%02d_%02d_%02d_%02d", (info.tm_year+1900), (info.tm_mon+1), info.tm_mday, info.tm_hour, info.tm_min);
+
+    struct stat st = {0};
+    char log_dir[PATH_MAX/2];
 
     if(logs){
         if(relative){
-            sprintf(path[0], "logs/gps.log");
-            sprintf(path[1], "logs/galileo.log");
-            sprintf(path[2], "logs/imu.log");
+            sprintf(log_dir, "logs/logs_%s", str_time);
+            if (stat(log_dir, &st) == -1) {
+                mkdir(log_dir, 0777);
+            }
         }
         else{
-            sprintf(path[0], "%slogs/gps.log", root_path);
-            sprintf(path[1], "%slogs/galileo.log", root_path);
-            sprintf(path[2], "%slogs/imu.log", root_path);
+            sprintf(log_dir, "%slogs/logs_%s", root_path, str_time);
+            if (stat(log_dir, &st) == -1) {
+                mkdir(log_dir, 0777);
+            }
         }
+        sprintf(path[0], "%s/gps_%s.log", log_dir, str_time);
+        sprintf(path[1], "%s/galileo_%s.log", log_dir, str_time);
+        sprintf(path[2], "%s/imu_%s.log", log_dir, str_time);
+
         sol_file[GPS] = fopen(path[0], "w");
 
         sol_file[GALILEO] = fopen(path[1], "w");
