@@ -110,6 +110,7 @@ Vector3d mx_pad_ba;
 VectorXd initP(15);
 VectorXd initQ(15);
 Matrix3d posvar;
+Matrix3d posvar1;
 Vector3d initPosvar;
 VectorXd va(6);
 Vector3d dv0;
@@ -154,6 +155,26 @@ double IMU_INI_TIME_END;
 
 ReaderGNSS OBSgnss;
 ReaderIMU OBSimu;
+
+/*double avg_acc_x;
+double avg_acc_y;
+double avg_acc_z;
+
+double tot_acc_x;
+double tot_acc_y;
+double tot_acc_z;
+
+int nsamples;*/
+
+Matrix<double, 1, 3> GNSS_pos; 
+Matrix<double, 1, 3> GNSS_vel; 
+Matrix<double, 1, 6> gnss_posP;
+Matrix<double, 1, 6> gnss_velP;
+
+const int VAR_POS=10^2; /*const double VAR_VEL=0.0225*/; const int MAX_DPOS=10; /*const int MAX_DVEL=5;*/
+
+Vector3d rr; 
+Vector3d pos_GNSS; 
 
 Loosely::Loosely(){
 
@@ -694,7 +715,7 @@ void calculateSTD(gnss_sol_t* int_sol){
 		dw0 << -0.004286024305556, -0.024490017361111, 0.126399739583333;*/
 
 		//Debug print
-		//printf("AA: %lf %lf %lf\n", va(0), va(1), va(2));
+		printf("AA: %lf %lf %lf\n", va(0), va(1), va(2));
 		(*int_sol).sda = va(0);
 		(*int_sol).sdb = va(1);
 		(*int_sol).sdc = va(2);
@@ -702,122 +723,19 @@ void calculateSTD(gnss_sol_t* int_sol){
 		(*int_sol).sdbc = va(4);
 		(*int_sol).sdca = va(5);
 	}else{
-		/*dw = Kg*dw0-bg*nt;
-		dv = Ka*dv0-ba*nt;
-
-		// extrapolate velocity and position
-		vel_mid = vel+ acc*(nt/2);     
-		Vector3d a = vel+vel_mid;               
-		pos_mid = pos+ Mpv*(a)/2*nt;  //pos_mid = 0
-
-		// update the earth related parameters
-		earth_update(pos_mid,vel_mid);
-		wib = dw/nt;
-		fb  = dv/nt;
-		fn  = Cnb*fb;
-		web = wib-Cnb.transpose()*eth.wnie;
-
-		// update velocity 
-		dv_rot  = 0.5*dw0.cross(dv0);
-		dv_scul = 1/12*(old_dw.cross(dv0)+old_dv.cross(dw0));
-		dv_sf   = (Matrix3d::Identity()-0.5*nt*askew(eth.wnin))*Cnb*dv + Cnb*(dv_rot+dv_scul);
-		dv_cor  = eth.gcc*nt;
-		vel_new = vel+dv_sf+dv_cor;
-
-		// update position 
-		Mpv(0, 1) = eth.Mpv2;
-		Mpv(1, 0) = eth.Mpv4;
-		pos_new = pos + Mpv*(vel+vel_new)/2*nt;
-
-		// update attitude 
-		dw_cone  = 1/12*old_dw.cross(dw0);
-		phi_b_ib = dw+dw_cone;
-		phi_n_in = eth.wnin*nt;
-		Cbb = rvec2mat(phi_b_ib).transpose();
-		Cnn = rvec2mat(phi_n_in).transpose();
-		Cnb_new = Cnn*Cnb*Cbb;
-		att_new = Cnb2att(Cnb_new);
-
-		// update INS result
-		Cnb = Cnb_new;
-		att = att_new;
-		vel = vel_new;
-		pos = pos_new;
-		x << att, vel, pos, bg, ba;
-
-		old_dw=dw0;
-		old_dv=dv0;
-
-		MatrixXd Phi = update_trans_mat(eth,vel,fn,tauA,tauG,nt,Cnb,Mpv);
-
-		MatrixXd G = MatrixXd::Zero(15,15);
-		//G(1:3,1:3)=-Cnb;
-		for(int i=0; i < 3; i++){
-			for(int j=0; j < 3; j++){
-				G(i, j) = -Cnb(i, j);
-			}
-		}
-		//G(4:6,4:6)= Cnb;
-		for(int i=0; i < 3; i++){
-			for(int j=0; j < 3; j++){
-				G(i+3, j+3) = Cnb(i, j);
-			}
-		}
-		Matrix3d id = Matrix3d::Identity();
-		//G(10:12,10:12)=Matrix3d::Identity();
-		for(int i=0; i < 3; i++){
-			for(int j=0; j < 3; j++){
-				G(i+9, j+9) = id(i, j);
-			}
-		}
-		//G(13:15,13:15)=Matrix3d::Identity();
-		for(int i=0; i < 3; i++){
-			for(int j=0; j < 3; j++){
-				G(i+12, j+12) = id(i, j);
-			}
-		}
-
-		Q0=G*Q*G.transpose();
-		P0=P+0.5*Q0;
-		P=Phi*P0*Phi.transpose()+0.5*Q0;
-
-		Dblh2Dxyz(pos);
-		
-		initPosvar << P(6, 6), P(7, 7), P(8, 8);
-		posvar = initPosvar.array().matrix().asDiagonal(); //blh variance
-
-		posvar = T * posvar * T.transpose(); //xyz variance
-
-		//variance
-		va << posvar(0, 0), posvar(1, 1), posvar(2, 2);
-		//printf("BB: %lf\n", posvar(0, 0));
-
-		for(int i = 0; i < 3; i++){
-			if(va(i) < 0)
-				va(i) = -sqrt(-va(i));
-			else
-				va(i) = sqrt(va(i));
-		}
-		//Debug print
-		printf("AA: %lf %lf %lf\n", va(0), va(1), va(2));
-		(*int_sol).sda = va(0);
-		(*int_sol).sdb = va(1);
-		(*int_sol).sdc = va(2);*/
-
-		const int VAR_POS=10^2; /*const double VAR_VEL=0.0225*/; const int MAX_DPOS=10; /*const int MAX_DVEL=5;*/
-		Matrix<double, 1, 3> GNSS_pos; GNSS_pos << (*int_sol).a , (*int_sol).b, (*int_sol).c;
-		Matrix<double, 1, 3> GNSS_vel; GNSS_vel << 0, 0, 0;
-		Matrix<double, 1, 6> gnss_posP; gnss_posP << (*int_sol).sda, (*int_sol).sdb, (*int_sol).sdc, (*int_sol).sdab, (*int_sol).sdbc, (*int_sol).sdca;
-		Matrix<double, 1, 6> gnss_velP; gnss_velP << 0, 0, 0, 0, 0, 0;
-		Vector3d rr; rr = GNSS_pos.transpose(); 
-		Vector3d pos_GNSS=xyz2blh(rr); 
+		/*GNSS_pos << (*int_sol).a , (*int_sol).b, (*int_sol).c;
+		GNSS_vel << 0, 0, 0;
+		gnss_posP << (*int_sol).sda, (*int_sol).sdb, (*int_sol).sdc, (*int_sol).sdab, (*int_sol).sdbc, (*int_sol).sdca;
+		gnss_velP << 0, 0, 0, 0, 0, 0;
+		rr = GNSS_pos.transpose(); 
+		pos_GNSS=xyz2blh(rr); */
 		//Vector3d vel_GNSS=Cne*GNSS_vel.transpose();
 
 		Pp << gnss_posP(0), gnss_posP(3), gnss_posP(5), 
 		gnss_posP(3), gnss_posP(1), gnss_posP(4),
 		gnss_posP(5), gnss_posP(4), gnss_posP(2);
 
-		//print(Pp);
+		print(Pp);
 
 		if(Pp.diagonal().maxCoeff()>VAR_POS)
 			rr=Vector3d::Zero();
@@ -826,7 +744,7 @@ void calculateSTD(gnss_sol_t* int_sol){
 			VAR1 << Pp(0,0), Pp(1,1), Pp(2,2);
 		}
 
-		//print(VAR1);
+		print(VAR1);
 
 		/*Matrix<double, 1, 6> velP=gnss_velP; 
 		Pp << velP(0), velP(3), velP(5),
@@ -845,7 +763,7 @@ void calculateSTD(gnss_sol_t* int_sol){
 
 		Vector3d pos_INS=pos+Mpv*Cnb*lever;
 
-		//print(pos_INS);
+		print(pos_INS);
 		//Vector3d vel_INS=vel+Cnb*askew(web)*lever;
 
 		v=pos_INS-pos_GNSS; 
@@ -853,14 +771,14 @@ void calculateSTD(gnss_sol_t* int_sol){
 		H=MatrixXd::Zero(3,15);
 		H(0,6)=1;H(1,7)=1;H(2,8)=1;
 
-		//print(v);
-		//print(R);
-		//print(H);
+		print(v);
+		print(R);
+		print(H);
 
 		VectorXd x_pre = x;
 		MatrixXd P_pre = P;
-		//print(x_pre);
-		//print(P_pre);
+		print(x_pre);
+		print(P_pre);
 
 		////////////////////// measurement update
 		int nx= 15 /*size(x_pre,1)*/; int stat=1;
@@ -869,17 +787,17 @@ void calculateSTD(gnss_sol_t* int_sol){
 		if(Q.determinant()==0)
 			stat=0;
 
-		//print(Q);
+		print(Q);
 
 		MatrixXd K(15, 3); K =P_pre*H.transpose()*Q.inverse();
 		VectorXd xx(15); xx = K*v;
 		P=(MatrixXd::Identity(nx, nx)-K*H)*P_pre;
 
-		//print(K);
+		print(K);
 
-		//print(xx);
+		print(xx);
 
-		//print(P);
+		print(P);
 
 		//if(~isreal(xx)||~isreal(P))
 		//	stat=0;
@@ -887,14 +805,14 @@ void calculateSTD(gnss_sol_t* int_sol){
 		Vector3d h; h << xx(0), xx(1), xx(2);
 		Cnb = (Matrix3d::Identity()+askew(h))*Cnb;
 
-		//print(Cnb);
+		print(Cnb);
 		//if ~isreal(Cnb)
 		//	stat=0;
 
 		//Cnb = Cnb;
 		att = Cnb2att(Cnb);
 
-		//print(att);
+		print(att);
 		Vector3d xx_i;
 		//xx_i << xx(3), xx(4), xx(5);
 		//vel = vel-xx_i;
@@ -906,26 +824,26 @@ void calculateSTD(gnss_sol_t* int_sol){
 		ba  = ba+xx_i;
 		x  << att, vel, pos, bg, ba;
 
-		//print(pos);
-		//print(bg);
-		//print(ba);
-		//print(x);
+		print(pos);
+		print(bg);
+		print(ba);
+		print(x);
 		//P = P;
 
 		Vector3d helper; helper << x(6), x(7), x(8);
 		rr=blh2xyz(helper); Dblh2Dxyz(helper);
 		pos=rr.transpose();
 
-		//print(rr);
+		print(rr);
 
-		//print(pos);
+		print(pos);
 
 		helper << x(3), x(4), x(5);
 		//vel=(Cen*helper).transpose();
 		helper << x(0), x(1), x(2);
 		att=helper.transpose()/0.0175;
 
-		//print(att);
+		print(att);
 
 		if(att(2)>=0)
 			att(2)=360-att(2);
@@ -934,17 +852,17 @@ void calculateSTD(gnss_sol_t* int_sol){
 
 		initPosvar << P(6, 6), P(7, 7), P(8, 8);
 		posvar = initPosvar.array().matrix().asDiagonal(); //blh variance
+        posvar1 << P(6,6), P(6,7), P(6,8), P(7,6), P(7,7), P(7, 8), P(8, 6), P(8, 7), P(8, 8);
+		posvar=T*posvar1*T.transpose();        //blh_var to xyz_var
 
-		posvar=T*posvar*T.transpose();        //blh_var to xyz_var
-
-		//print(posvar);
+		print(posvar1);
 
 		//velvar=P(4:6,4:6); velvar=Cen*velvar*Cen';    %enu_var to xyz_var
 
 
 		va << posvar(0, 0), posvar(1, 1), posvar(2, 2), posvar(0,1), posvar(1,2), posvar(0,2);
 
-		//print(va);
+		print(va);
 
 		for(int i = 0; i < 6; i++){
 			if(va(i) < 0)
@@ -954,7 +872,7 @@ void calculateSTD(gnss_sol_t* int_sol){
 		}
 
 		//Debug print
-		//printf("AA: %lf %lf %lf\n", va(0), va(1), va(2));
+		printf("AA: %lf %lf %lf\n", va(0), va(1), va(2));
 
 		(*int_sol).sda = va(0);
 		(*int_sol).sdb = va(1);
@@ -979,10 +897,16 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 				printf("SEMOR: End initialization\n");
 			}
 			read_imu();
-			if(imu_ready){
-				_epochIMU = OBSimu._IMUdata.imuTime;
+			if(imu_ready == 1){
+				imu_ready = 2;
 				(*int_sol).time.week = OBSimu._IMUdata.week;
+				avg_acc_x = tot_acc_x/((double)nsamples);
+				avg_acc_y = tot_acc_y/((double)nsamples);
+				avg_acc_z = tot_acc_z/((double)nsamples);
+
+				printf("%lf - %lf - %lf\n", avg_acc_x, avg_acc_y, avg_acc_z);
 			}
+			_epochIMU = OBSimu._IMUdata.imuTime;
 		}
 		return;
 	}
@@ -997,11 +921,12 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 		MechECEF.InitializeMechECEF(_ECEF_imu, _LLH_o, GNSSsol.velXYZ, iniIMU._RPY, iniIMU._ACCbias, iniIMU._GYRbias);
 		first = 0;
 	}
+	//here we have previous gnss position
 	do {
 		read_imu();
 
 		// Process IMU
-		SolutionIMU(OBSimu, MechECEF);				//Get position from current MechECEF state and IMU data just read - This has effects on: MechECEF e IMUsol
+		SolutionIMU(OBSimu, MechECEF);	//this is the gnss+first imu data		                                                                      	//Get position from current MechECEF state and IMU data just read - This has effects on: MechECEF e IMUsol
 		//Here we have gnss+acc+gyr
 
 		(*int_sol).a = IMUsol.posXYZ.at(0);
@@ -1016,7 +941,168 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 		//printf("%f, %f, %f\n", (*int_sol).sda, (*int_sol).sdb, (*int_sol).sdc);
 		//Update Time
 		_epochIMU = OBSimu._IMUdata.imuTime;
+
+
 	} while (_epochIMU <= (*int_sol).time.sec);
+
+	GNSS_pos << (*int_sol).a , (*int_sol).b, (*int_sol).c;
+	GNSS_vel << 0, 0, 0;
+	gnss_posP << (*int_sol).sda, (*int_sol).sdb, (*int_sol).sdc, (*int_sol).sdab, (*int_sol).sdbc, (*int_sol).sdca;
+	gnss_velP << 0, 0, 0, 0, 0, 0;
+	rr = GNSS_pos.transpose(); 
+	pos_GNSS=xyz2blh(rr); 
+
+	Pp << gnss_posP(0), gnss_posP(3), gnss_posP(5), 
+	gnss_posP(3), gnss_posP(1), gnss_posP(4),
+	gnss_posP(5), gnss_posP(4), gnss_posP(2);
+
+	//print(Pp);
+
+	if(Pp.diagonal().maxCoeff()>VAR_POS)
+		rr=Vector3d::Zero();
+	else{
+		Pp=T.inverse()*Pp*T.transpose().inverse();
+		VAR1 << Pp(0,0), Pp(1,1), Pp(2,2);
+	}
+
+	//print(VAR1);
+
+	/*Matrix<double, 1, 6> velP=gnss_velP; 
+	Pp << velP(0), velP(3), velP(5),
+		velP(3), velP(1), velP(4),
+		velP(5), velP(4), velP(2);
+	
+
+	if(Pp.diagonal().maxCoeff()>VAR_VEL)
+		ve=Vector3d::Zero();
+	else{
+		Pp=Cne*Pp*Cne.transpose();
+		VAR2 << Pp(0,0), Pp(1,1), Pp(2,2);
+		if(VAR2.norm()==0)
+			VAR2 << VAR_VEL, VAR_VEL, VAR_VEL;
+	}*/
+
+	Vector3d pos_INS=pos+Mpv*Cnb*lever;
+
+	//print(pos_INS);
+	//Vector3d vel_INS=vel+Cnb*askew(web)*lever;
+
+	v=pos_INS-pos_GNSS; 
+	R=VAR1.asDiagonal();
+	H=MatrixXd::Zero(3,15);
+	H(0,6)=1;H(1,7)=1;H(2,8)=1;
+
+	//print(v);
+	//print(R);
+	//print(H);
+
+	VectorXd x_pre = x;
+	MatrixXd P_pre = P;
+	//print(x_pre);
+	//print(P_pre);
+
+	////////////////////// measurement update
+	int nx= 15 /*size(x_pre,1)*/; int stat=1;
+
+	Q=H*P_pre*H.transpose()+R;
+	if(Q.determinant()==0)
+		stat=0;
+
+	//print(Q);
+
+	MatrixXd K(15, 3); K =P_pre*H.transpose()*Q.inverse();
+	VectorXd xx(15); xx = K*v;
+	P=(MatrixXd::Identity(nx, nx)-K*H)*P_pre;
+
+	//print(K);
+
+	//print(xx);
+
+	//print(P);
+
+	//if(~isreal(xx)||~isreal(P))
+	//	stat=0;
+
+	Vector3d h; h << xx(0), xx(1), xx(2);
+	Cnb = (Matrix3d::Identity()+askew(h))*Cnb;
+
+	//print(Cnb);
+	//if ~isreal(Cnb)
+	//	stat=0;
+
+	//Cnb = Cnb;
+	att = Cnb2att(Cnb);
+
+	//print(att);
+	Vector3d xx_i;
+	//xx_i << xx(3), xx(4), xx(5);
+	//vel = vel-xx_i;
+	xx_i << xx(6), xx(7), xx(8);
+	pos = pos-xx_i;
+	xx_i << xx(9), xx(10), xx(11);
+	bg  = bg+xx_i;
+	xx_i << xx(12), xx(13), xx(14);
+	ba  = ba+xx_i;
+	x  << att, vel, pos, bg, ba;
+
+	//print(pos);
+	//print(bg);
+	//print(ba);
+	//print(x);
+	//P = P;
+
+	Vector3d helper; helper << x(6), x(7), x(8);
+	rr=blh2xyz(helper); Dblh2Dxyz(helper);
+	pos=rr.transpose();
+
+	//print(rr);
+
+	//print(pos);
+
+	helper << x(3), x(4), x(5);
+	//vel=(Cen*helper).transpose();
+	helper << x(0), x(1), x(2);
+	att=helper.transpose()/0.0175;
+
+	//print(att);
+
+	if(att(2)>=0)
+		att(2)=360-att(2);
+	else
+		att(2)=-att(2);
+
+	initPosvar << P(6, 6), P(7, 7), P(8, 8);
+	posvar = initPosvar.array().matrix().asDiagonal(); //blh variance
+	posvar1 << P(6,6), P(6,7), P(6,8), P(7,6), P(7,7), P(7, 8), P(8, 6), P(8, 7), P(8, 8);
+	posvar=T*posvar1*T.transpose();        //blh_var to xyz_var
+
+	//print(posvar1);
+
+	//velvar=P(4:6,4:6); velvar=Cen*velvar*Cen';    %enu_var to xyz_var
+
+
+	va << posvar(0, 0), posvar(1, 1), posvar(2, 2), posvar(0,1), posvar(1,2), posvar(0,2);
+
+	//print(va);
+
+	for(int i = 0; i < 6; i++){
+		if(va(i) < 0)
+			va(i) = -sqrt(-va(i));
+		else
+			va(i) = sqrt(va(i));
+	}
+
+	//Debug print
+	//printf("AA: %lf %lf %lf\n", va(0), va(1), va(2));
+
+	(*int_sol).sda = va(0);
+	(*int_sol).sdb = va(1);
+	(*int_sol).sdc = va(2);
+	(*int_sol).sdab = va(3);
+	(*int_sol).sdbc = va(4);
+	(*int_sol).sdca = va(5);
+
+	//here we have next gnss+imu position
 
 	//We have position and STD of this epoch
 
@@ -1039,18 +1125,20 @@ void Loosely::init_imu(gnss_sol_t fst_pos){
 	stringstream ss, ss1;
 	if(relative){
 		ss << "test/imu.csv";
-		ss1 << "logs/logs_" << str_time << "/imu_raw_" << str_time << ".log";
+		ss1 << log_dir << "/imu_raw" << ".log";
 	}
 	else{
 		ss << root_path << "test/imu.csv";
-		ss1 << root_path << "logs/logs_" << str_time << "/imu_raw_" << str_time << ".log";
+		ss1 << log_dir << "/imu_raw" << ".log";
 		//cout << ss1.str() << endl;
 		//cout.flush();
 	}
 	FIO.fileSafeIn(ss.str(), fimu);
 
-	if(logs)
+	if(logs){
+		cout << ss1.str() << endl;
 		out.open(ss1.str());
+	}
 
 	OBSgnss.readEpoch(fst_pos);
 	read_imu(); //fill OBSimu

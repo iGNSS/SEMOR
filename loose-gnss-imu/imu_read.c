@@ -294,6 +294,17 @@ double sec = 0;
 int first_read = 1;
 int need_setup = 1;
 
+double avg_acc_x = 0;
+double avg_acc_y = 0;
+double avg_acc_z = 0;
+int nsamples = 0;
+
+double tot_acc_x = 0;
+double tot_acc_y = 0;
+double tot_acc_z = 0;
+
+double gravity = 9.806;
+
 int setup(){
 	//	open /dev/i2c-1 and set slave address
 	if (i2c_open() < 0)
@@ -447,11 +458,15 @@ int get_imu_data(char line[IMU_LENGTH]){
 		else{
 			sec += (stamp-last_stamp) * 0.000025;
 		}
-		sprintf(line, "%d %lf %7.4f %7.4f %7.4f %8.3f %8.3f %8.3f", week,
+		nsamples += 1;
+		tot_acc_x += ax*acclUnits*gravity;
+		tot_acc_y += ay*acclUnits*gravity;
+		tot_acc_z += az*acclUnits*gravity;
+		sprintf(line, "%d %lf %7.4f %7.4f %7.4f %8.3f %8.3f %8.3f | %10u", week,
 			sec,
 			/*ax,ay,az, gx,gy,gz,*/
-			ax*acclUnits, ay*acclUnits, az*acclUnits,
-			gx*gyroUnits, gy*gyroUnits, gz*gyroUnits);
+			ax*acclUnits*gravity-avg_acc_x, ay*acclUnits*gravity-avg_acc_y, az*acclUnits*gravity-avg_acc_z,
+			gx*gyroUnits, gy*gyroUnits, gz*gyroUnits, stamp);
 		
 		last_stamp = stamp;
 

@@ -56,21 +56,99 @@ int n_imu; //how many times the imu solution has been used consecutively
 
 int first_time = 1;
 
+char log_dir[PATH_MAX/2];
+
+
+gnss_sol_t ecef2geo(gnss_sol_t gnss){
+
+    // Output vector - Lat, Long, Height
+	// Variables
+	double x, y, z;
+	x = gnss.a; y = gnss.b; z = gnss.c;
+	// Semi Major Axis and Eccentricity
+	const double a = 6378137; const double e = 0.08181979;
+	// Compute Longitude
+	double lambda = atan2(y, x);
+	// Physical radius of the point 
+	double r = sqrt(pow(x, 2) + pow(y, 2) + pow(z, 2));
+	// Radius in the x-y plane 
+	double p = sqrt(pow(x, 2) + pow(y, 2));
+	// GEOcentric latitude (Initial Approx)
+	double phi_o = atan2(p, z); double phi_i = phi_o;
+	// Radius of curvature in the prime vertical
+	double Rn;
+	// Height
+	double h;
+	// Loop
+	for (unsigned i = 0; i < 3; i++) {
+		// Recalculate Radius of curvature in the prime vertical
+		Rn = a / sqrt(1 - (e * e * sin(phi_i) * sin(phi_i)));
+		// Recalculate Height
+		h = (p / cos(phi_i)) - (Rn);
+		// Recalculate Latitude
+		phi_i = atan((z / p) * (pow((1 - ((pow(e, 2))*(Rn / (Rn + h)))), (-1))));
+	}
+	// Recalculate Height
+	h = (p / cos(phi_i)) - Rn;
+	// Populate output vector
+	gnss.a = phi_i;
+	gnss.b = lambda;
+	gnss.c = h;
+	return gnss;
+    
+    /*
+    // WGS84 constants
+    double a = 6378137.0;
+    double f = 1.0 / 298.257223563;
+    // derived constants
+    double b = a - f*a;
+    double e = sqrt(pow(a,2)-pow(b,2))/a;
+    double clambda = atan2(gnss.b,gnss.a);
+    double p = sqrt(pow(gnss.a,2)+pow(gnss.b,2));
+    double h_old = 0.0;
+    // first guess with h=0 meters
+    double theta = atan2(gnss.c,p*(1.0-pow(e,2.0)));
+    double cs = cos(theta);
+    double sn = sin(theta);
+    double N = pow(a,2)/sqrt(pow(a*cs,2)+pow(b*sn,2.0));
+    double h = p/cs - N;
+    while (fabs(h-h_old) > 1.0e-6){
+        h_old = h;
+        theta = atan2(gnss.c,p*(1.0-pow(e,2.0)*N/(N+h)));
+        cs = cos(theta);
+        sn = sin(theta);
+        N = pow(a,2.0)/sqrt(pow(a*cs,2.0)+pow(b*sn,2.0));
+        h = p/cs - N;
+    }
+    //llh = {'lon':clambda, 'lat':theta, 'height': h}
+    gnss.a = clambda;
+    gnss.b = theta;
+    gnss.c = h;
+    return gnss;*/
+}
+
+
 LocData_t get_data(){ //SiConsulting
     LocData_t data;
+    gnss_sol_t geo_best;
 
     int sec_today, sec_today_utc, h_utc, h, m, s;
 
     time_t rawtime, ti;
     struct tm info;
 
-    data.dLat = best.a;
-    data.dLon = best.b;
-    data.dHeigth = best.c;
+    geo_best = ecef2geo(best);
 
-    data.dSdn = best.sda;
-    data.dSde = best.sdb;
-    data.dSdu = best.sdc;
+    data.dLat = geo_best.a;
+    data.dLon = geo_best.b;
+    data.dHeigth = geo_best.c;
+
+    data.dSdn = geo_best.sda;
+    data.dSde = geo_best.sdb;
+    data.dSdu = geo_best.sdc;
+    data.ui8FixQual = geo_best.Q;
+
+
 
     sec_today = (best.time.sec-LEAP_SECONDS)%(24*3600); //7200 because GPS is shifted
 
@@ -302,34 +380,7 @@ int get_best_sol_3(){ //if 3 solutions available - 0: no best found, 1: best fou
     }
     return 0;
 }
-/*
-void ecef2geo(gnss_sol_t gnss){
-    # --- WGS84 constants
-    a = 6378137.0
-    f = 1.0 / 298.257223563
-    # --- derived constants
-    b = a - f*a
-    e = math.sqrt(math.pow(a,2.0)-math.pow(b,2.0))/a
-    clambda = math.atan2(y,x)
-    p = math.sqrt(pow(x,2.0)+pow(y,2))
-    h_old = 0.0
-    # first guess with h=0 meters
-    theta = math.atan2(z,p*(1.0-math.pow(e,2.0)))
-    cs = math.cos(theta)
-    sn = math.sin(theta)
-    N = math.pow(a,2.0)/math.sqrt(math.pow(a*cs,2.0)+math.pow(b*sn,2.0))
-    h = p/cs - N
-    while abs(h-h_old) > 1.0e-6:
-        h_old = h
-        theta = math.atan2(z,p*(1.0-math.pow(e,2.0)*N/(N+h)))
-        cs = math.cos(theta)
-        sn = math.sin(theta)
-        N = math.pow(a,2.0)/math.sqrt(math.pow(a*cs,2.0)+math.pow(b*sn,2.0))
-        h = p/cs - N
-    llh = {'lon':clambda, 'lat':theta, 'height': h}
-    return llh
-}
-*/
+
 void process_solutions(int chk_sols){
     int i;
     int is_best_found = 1;
@@ -402,7 +453,7 @@ void process_solutions(int chk_sols){
 
     
 
-    if(logs && imu_ready){
+    if(logs && (imu_ready >= 1)){
         print_solution(GPS);
         print_solution(GALILEO);
         print_solution(IMU);
@@ -433,6 +484,8 @@ void process_solutions(int chk_sols){
     output(best);
     LocData_t res;
     res = get_data();
+    printf("x: %lf(%lf), y: %lf(%lf), z: %lf(%lf)\n", best.a, res.dLat, best.b, res.dLon, best.c, res.dHeigth);
+    fflush(stdout);
     //printf("%s\n", res.ui8TS);
 
     if(!is_best_found && chk_sols < 4){ //no best solution and no imu solution
@@ -682,7 +735,7 @@ void start_processing(void){
     sprintf(str_time, "%d_%02d_%02d_%02d_%02d", (info.tm_year+1900), (info.tm_mon+1), info.tm_mday, info.tm_hour, info.tm_min);
 
     struct stat st = {0};
-    char log_dir[PATH_MAX/2];
+    log_dir[PATH_MAX/2];
 
     if(logs){
         if(relative){
@@ -707,6 +760,13 @@ void start_processing(void){
 
         sol_file[IMU] = fopen(path[2], "w");
     }
+
+    char pp[PATH_MAX/2];
+
+    sprintf(pp, "%s/imu_raw.log", log_dir, str_time);
+
+    FILE* ff = fopen(pp, "w");
+    fclose(ff);
 
     file = fopen(FILE_PATH, "w");
     if(file == NULL){

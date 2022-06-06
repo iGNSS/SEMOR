@@ -38,6 +38,19 @@ extern double init_x;
 extern double init_y;
 extern double init_z;
 
+extern double avg_acc_x;
+extern double avg_acc_y;
+extern double avg_acc_z;
+
+extern double tot_acc_x;
+extern double tot_acc_y;
+extern double tot_acc_z;
+
+extern int nsamples;
+
+extern char log_dir[PATH_MAX/2];
+
+
 extern pid_t str2str_pid, rtkrcv1_pid, rtkrcv2_pid;
 
 //extern char imu_data[IMU_DATA_LAST_N_SEC * IMU_HZ][75]; /* Last 2 seconds of imu data (imu send data at 100Hz and it's a string of about 75 chars)*/
