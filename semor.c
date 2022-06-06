@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include "semor.h"
+#include "src/semor.h"
 
 #define MAX_LINE 256
 
@@ -259,27 +259,9 @@ int main(int argc, char *argv[]){
         fprintf(f, "pppconf=%s\n", pppconf);
         fprintf(f, "rtkrcv-port-rtk=%s\n", rtk_port_rtkrcv);
         fprintf(f, "rtkrcv-port-ppp=%s\n", ppp_port_rtkrcv);
-        fprintf(f, "\n$IMU parameters\n");
-        fprintf(f, "imu-init-epochs(sec)=%d\n", imu_init_epochs);
-        fprintf(f, "imu-drift=%d\n", imu_drift);
-        fprintf(f, "sample-rate(hz)=%d\n", sample_rate);
-        fprintf(f, "init-bg-unc=%.15g\n", init_bg_unc);
-        fprintf(f, "init-ba-unc=%.15g\n", init_ba_unc);
-        fprintf(f, "psd-gyro=%.15g\n", psd_gyro);
-        fprintf(f, "psd-acce=%.15g\n", psd_acce);
-        fprintf(f, "psd-bg=%.15g\n", psd_bg);
-        fprintf(f, "psd-ba=%.15g\n", psd_ba);
-        fprintf(f, "$Initialization coordinates\n", psd_ba);
-        fprintf(f, "init-x=0\n");
-        fprintf(f, "init-y=0\n");
-        fprintf(f, "init-z=0\n");
     }
     fclose(f);
 
-    if(init_pos != 7){
-        printf("Please, set the initialization coordinates in the configuration file.\n");
-        close_semor(1);
-    }
 
     //Initialize shared variables
     str2str_pid = rtkrcv1_pid = rtkrcv2_pid = -1;

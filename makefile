@@ -7,7 +7,7 @@ client.o:
 	gcc -c src/client.c -g -o bin/client.o
 
 semor: semor.o client.o
-	gcc bin/semor.o bin/client.o -lpthread -o bin/semor
+	gcc bin/semor.o bin/client.o -o bin/semor -lm
 
 clean:
 	-rm -f bin/semor.o

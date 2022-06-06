@@ -34,33 +34,103 @@
 //char rtk_port_rtkrcv[6];
 //char ppp_port_rtkrcv[6];
 
-gnss_sol_t sol[3]; /* GPS=0, GALILEO=1, IMU=2 */
+gnss_sol_t sol[2]; /* GPS=0, GALILEO=1 */
 gnss_sol_t best;
 
 gnss_sol_t initial_pos; //initial position for imu initialization
 
-FILE* sol_file[3];
+FILE* sol_file[2];
 
 FILE *file;
 
 pid_t str2str_pid, rtkrcv1_pid, rtkrcv2_pid;
 
 int isset_first_pos;
-int imu_ready;
 gnss_sol_t first_pos;
 
 int wait_read[2];
 int last_week[2];
 int seconds;
-int n_imu; //how many times the imu solution has been used consecutively
 
 int first_time = 1;
 
 char log_dir[PATH_MAX/2];
 
 
+
+
+const double RADIUS_EQUATOR = 6378137.0;
+const double a = RADIUS_EQUATOR;
+double asqr;
+
+const double FLATTENING_DENOM = 298.257223563;
+double FLATTENING;
+double RADIUS_POLES;
+double b;
+double bsqr;
+
+const double PI = 3.14159;
+double e;
+double eprime;
+
+void setup(){
+    FLATTENING = 1 / FLATTENING_DENOM;
+    RADIUS_POLES = RADIUS_EQUATOR*(1-FLATTENING);
+    b = RADIUS_POLES;
+    bsqr = b*b;
+    asqr = a*a;
+    e = sqrt((asqr - bsqr) / asqr);
+    eprime = sqrt((asqr - bsqr) / bsqr);
+}
+
+double radianToDegree(r) {
+  return r * (180 / PI);
+}
+
 gnss_sol_t ecef2geo(gnss_sol_t gnss){
 
+    double X = gnss.a;
+    double Y = gnss.b;
+    double Z = gnss.c;
+
+    double a = RADIUS_EQUATOR;
+    double b = RADIUS_POLES;
+
+    //Auxiliary values first
+    double p = sqrt(X*X + Y*Y);
+    double theta = atan((Z*a) / (p*b));
+
+    double sintheta = sin(theta);
+    double costheta = cos(theta);
+
+    double num = Z + eprime * eprime * b * sintheta * sintheta * sintheta;
+    double denom = p - e * e * a * costheta * costheta * costheta;
+
+    //Now calculate LLA
+    double latitude  = atan2(num, denom);
+    double longitude = atan2(Y, X);
+    double N = getN(latitude, a);
+    double altitude  = (p / cos(latitude)) - N;
+
+    if (X < 0 && Y < 0) {
+        longitude = longitude - PI;
+    }
+
+    if (X < 0 && Y > 0) {
+        longitude = longitude + PI;
+    }
+
+    latitude = radianToDegree(latitude);
+    longitude = radianToDegree(longitude);
+
+    gnss.a = latitude;
+    gnss.b = longitude;
+    gnss.c = altitude;
+
+    return gnss;
+
+    /*
+    //1
     // Output vector - Lat, Long, Height
 	// Variables
 	double x, y, z;
@@ -95,8 +165,10 @@ gnss_sol_t ecef2geo(gnss_sol_t gnss){
 	gnss.b = lambda;
 	gnss.c = h;
 	return gnss;
+    */
     
     /*
+    //2
     // WGS84 constants
     double a = 6378137.0;
     double f = 1.0 / 298.257223563;
@@ -125,6 +197,9 @@ gnss_sol_t ecef2geo(gnss_sol_t gnss){
     gnss.b = theta;
     gnss.c = h;
     return gnss;*/
+
+
+
 }
 
 
@@ -181,11 +256,9 @@ void close_semor(int status){
     if(rtkrcv2_pid != -1 && kill(rtkrcv2_pid, SIGKILL) == -1){
         perror("SEMOR: Error killing rtkrcv(2) process");
     }
-    close_ctocpp();
     if(logs){
         fclose(sol_file[GPS]);
         fclose(sol_file[GALILEO]);
-        fclose(sol_file[IMU]);
     }
     fclose(file);
     exit(status);
@@ -329,26 +402,6 @@ void gnss_avg_2(gnss_sol_t sol1, gnss_sol_t sol2){
     best.sdca = sqrt(pow(sol1.sdca/2, 2) + pow(sol2.sdca/2, 2));
 }
 
-void gnss_avg_3(gnss_sol_t sol1, gnss_sol_t sol2, gnss_sol_t sol3){
-    //Position
-    best.a = (sol1.a + sol2.a + sol3.a)/3;
-    best.b = (sol1.b + sol2.b + sol3.b)/3;
-    best.c = (sol1.c + sol2.c + sol3.c)/3;
-
-    //Velocity
-    best.va = (sol1.va + sol2.va + sol3.va)/3;
-    best.vb = (sol1.vb + sol2.vb + sol3.vb)/3;
-    best.vc = (sol1.vc + sol2.vc + sol3.vc)/3;
-
-    //Standard deviation
-    best.sda = sqrt(pow(sol1.sda/3, 2) + pow(sol2.sda/3, 2) + pow(sol3.sda/3, 2));
-    best.sdb = sqrt(pow(sol1.sdb/3, 2) + pow(sol2.sdb/3, 2) + pow(sol3.sdb/3, 2));
-    best.sdc = sqrt(pow(sol1.sdc/3, 2) + pow(sol2.sdc/3, 2) + pow(sol3.sdc/3, 2));
-
-    best.sdab = sqrt(pow(sol1.sdab/3, 2) + pow(sol2.sdab/3, 2) + pow(sol3.sdab/3, 2));
-    best.sdbc = sqrt(pow(sol1.sdbc/3, 2) + pow(sol2.sdbc/3, 2) + pow(sol3.sdbc/3, 2));
-    best.sdca = sqrt(pow(sol1.sdca/3, 2) + pow(sol2.sdca/3, 2) + pow(sol3.sdca/3, 2));
-}
 
 int get_best_sol2(int sol1_idx, int sol2_idx){ //if 2 gnss solutions available - 0: no best found, 1: best found
     if(similar_pos(sol[sol1_idx], sol[sol2_idx])){
@@ -358,28 +411,6 @@ int get_best_sol2(int sol1_idx, int sol2_idx){ //if 2 gnss solutions available -
     return 0;
 }
 
-int get_best_sol_3(){ //if 3 solutions available - 0: no best found, 1: best found (if no best found -> use IMU)
-    if(similar_pos(sol[GPS], sol[GALILEO])){
-        if(similar_pos(sol[GPS], sol[IMU])){
-            gnss_avg_3(sol[GPS], sol[GALILEO], sol[IMU]);
-            return 1;
-        }
-        //Solo le due soluzioni GNSS sono simili
-        gnss_avg_2(sol[GPS], sol[GALILEO]);
-        return 1;
-    }
-
-    if(similar_pos(sol[GPS], sol[IMU])){
-        gnss_avg_2(sol[GPS], sol[IMU]);
-        return 1;
-    }
-
-    if(similar_pos(sol[GALILEO], sol[IMU])){
-        gnss_avg_2(sol[GALILEO], sol[IMU]);
-        return 1;
-    }
-    return 0;
-}
 
 void process_solutions(int chk_sols){
     int i;
@@ -405,15 +436,7 @@ void process_solutions(int chk_sols){
             }
         }
     }
-    if(!imu_ready){
-        gnsscopy(&sol[IMU], sol[GPS]);
-        imu_sol(&sol[IMU]); //this takes 1 second
-        sol[IMU].time.sec++;
-        return;
-    }
 
-    if(sol[IMU].time.week != 0) 
-        chk_sols |= 4;
     switch(chk_sols){ //Get best solution between GPS, GALILEO, IMU
         case 0: //no solutions, return
             return;
@@ -430,78 +453,33 @@ void process_solutions(int chk_sols){
             best.time.week = sol[GPS].time.week;
             best.time.sec = sol[GPS].time.sec;
             break;
-        case 4: //only IMU
-            gnsscopy(&best, sol[IMU]);
-            is_best_found = 1;
-            break;
-        case 5: //GPS and IMU
-            is_best_found = get_best_sol2(GPS, IMU);
-            best.time.week = sol[GPS].time.week;
-            best.time.sec = sol[GPS].time.sec;
-            break;
-        case 6: //GALILEO and IMU
-            is_best_found = get_best_sol2(GALILEO, IMU);
-            best.time.week = sol[GALILEO].time.week;
-            best.time.sec = sol[GALILEO].time.sec;
-            break;
-        case 7: //all solutions available
-            is_best_found = get_best_sol_3();
-            best.time.week = sol[GPS].time.week;
-            best.time.sec = sol[GPS].time.sec;
-            break;
     }
 
     
 
-    if(logs && (imu_ready >= 1)){
+    if(logs){
         print_solution(GPS);
         print_solution(GALILEO);
-        print_solution(IMU);
-    }
-
-    if(is_best_found == 0 || chk_sols == 4){ //if is_best_found == 0 (IMU solution is used)
-        if(n_imu == imu_drift){
-            //REINITIALIZE SEMOR
-            printf("Re-initialize SEMOR\n");
-            close_semor(1);
-        }
-        else
-            n_imu++;
-    }
-    else{
-        n_imu = 0;
-    }
-
-    //Output
-    if(!is_best_found){
-        gnsscopy(&best, sol[IMU]);
     }
 
     //Here we have the solution
 
     //Convert the position from ecef to geodetic
     //ecef2geo(&best);
-    output(best);
-    LocData_t res;
-    res = get_data();
-    printf("x: %lf(%lf), y: %lf(%lf), z: %lf(%lf)\n", best.a, res.dLat, best.b, res.dLon, best.c, res.dHeigth);
-    fflush(stdout);
-    //printf("%s\n", res.ui8TS);
-
-    if(!is_best_found && chk_sols < 4){ //no best solution and no imu solution
-        //TODO
+    if(is_best_found){ //cosa metto in res se non ho trovato la posizione migliore?
+        output(best);
+        LocData_t res;
+        res = get_data();
+        printf("x: %lf(%lf), y: %lf(%lf), z: %lf(%lf)\n", best.a, res.dLat, best.b, res.dLon, best.c, res.dHeigth);
+        fflush(stdout);
+    }else{
+        fprintf(file, "no data\n");
+        fflush(file);
     }
 
     //Flag solutions as already used
     sol[GPS].time.week = 0;
     sol[GALILEO].time.week = 0;
-
-    //Post comparison and output
-    //So let's generate the next imu position
-    gnsscopy(&sol[IMU], best);
-    sol[IMU].time.week = 0;
-    sol[IMU].time.sec += 1; //Get imu position of the next second
-    imu_sol(&sol[IMU]); //this runs until next second
 
 }
 void check_termination(){
@@ -615,9 +593,7 @@ void handle_connection(){
     //fcntl(0, F_SETFL, fcntl(0, F_GETFL) | O_NONBLOCK);
 
     wait_read[0] = wait_read[1] = 0;
-    n_imu = 0;
 
-    sol[IMU].time.week = 0;
 
 
     while(1){
@@ -670,33 +646,19 @@ void handle_connection(){
             }
         }
 
-        if(first_input < 3){
+        if(first_input < 3){ //Go on when we have input from both RTK and PPP
             continue;
+        }
+        if(first_time){
+            first_time = 0;
+            printf("SEMOR: End initialization\n");
+            fflush(stdout);
         }
 
         if(debug){
             if(seconds == 0){
                 seconds = (sol[GPS].time.sec <= sol[GALILEO].time.sec) ? sol[GPS].time.sec : sol[GALILEO].time.sec; //Set current second to the minimum of the epochs of the 2 gnss solution
             }
-        }
-
-        if(first_time){
-            //Initialize imu epoch
-
-            struct timeval tv;
-            gettimeofday(&tv, NULL);
-            int week = ((tv.tv_sec+LEAP_SECONDS-GPS_EPOCH))/(7*24*3600);
-            int sec = (double)(((tv.tv_sec+LEAP_SECONDS-GPS_EPOCH))%(7*24*3600))+(tv.tv_usec / 1000000.0);
-
-            sol[IMU].time.week = week;
-            sol[IMU].time.sec = sec;
-
-            if(debug){
-                sol[IMU].time.sec = seconds;
-            }
-            init_imu(sol[IMU]);
-            //initial_pos.time.sec++;
-            first_time = 0;
         }
 
         process_solutions(check_sols); //Get best solution, output it and use it to calculate next imu position
@@ -713,14 +675,8 @@ void start_processing(void){
     int i;
     char path[3][PATH_MAX];
 
-    //Initialize structure of initial_pos
-    sol[IMU].a = init_x;
-    sol[IMU].b = init_y;
-    sol[IMU].c = init_z;
+    setup();
 
-    sol[IMU].va = 0;
-    sol[IMU].vb = 0;
-    sol[IMU].vc = 0;
 
     //DEBUG
     //initial_pos.time.week = 2032;
@@ -752,21 +708,12 @@ void start_processing(void){
         }
         sprintf(path[0], "%s/gps_%s.log", log_dir, str_time);
         sprintf(path[1], "%s/galileo_%s.log", log_dir, str_time);
-        sprintf(path[2], "%s/imu_%s.log", log_dir, str_time);
 
         sol_file[GPS] = fopen(path[0], "w");
 
         sol_file[GALILEO] = fopen(path[1], "w");
-
-        sol_file[IMU] = fopen(path[2], "w");
     }
 
-    char pp[PATH_MAX/2];
-
-    sprintf(pp, "%s/imu_raw.log", log_dir, str_time);
-
-    FILE* ff = fopen(pp, "w");
-    fclose(ff);
 
     file = fopen(FILE_PATH, "w");
     if(file == NULL){

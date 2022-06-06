@@ -4,8 +4,6 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "${workspaceFolder}/loose-gnss-imu/include",
-                "${workspaceFolder}/loose-gnss-imu/Libraries/eigen",
                 "/usr/include"
             ],
             "defines": [],
