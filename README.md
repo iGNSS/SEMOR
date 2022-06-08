@@ -1,3 +1,8 @@
+### Importante per SiC
+Se get_data() ritorna una soluzione  con dLat uguale a -1 allora c'è un mancato posizionamento per quell'epoca. Quindi ignorare/skippare quell'output.
+
+
+
 ### Setup SEMOR
 
 For now the software requires the absolute path to the SEMOR folder.

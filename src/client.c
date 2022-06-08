@@ -56,80 +56,15 @@ int first_time = 1;
 
 char log_dir[PATH_MAX/2];
 
-
-
-
-const double RADIUS_EQUATOR = 6378137.0;
-const double a = RADIUS_EQUATOR;
-double asqr;
-
-const double FLATTENING_DENOM = 298.257223563;
-double FLATTENING;
-double RADIUS_POLES;
-double b;
-double bsqr;
-
 const double PI = 3.14159;
-double e;
-double eprime;
 
-void setup(){
-    FLATTENING = 1 / FLATTENING_DENOM;
-    RADIUS_POLES = RADIUS_EQUATOR*(1-FLATTENING);
-    b = RADIUS_POLES;
-    bsqr = b*b;
-    asqr = a*a;
-    e = sqrt((asqr - bsqr) / asqr);
-    eprime = sqrt((asqr - bsqr) / bsqr);
-}
 
-double radianToDegree(r) {
+double radianToDegree(double r) {
   return r * (180 / PI);
 }
 
-gnss_sol_t ecef2geo(gnss_sol_t gnss){
-
-    double X = gnss.a;
-    double Y = gnss.b;
-    double Z = gnss.c;
-
-    double a = RADIUS_EQUATOR;
-    double b = RADIUS_POLES;
-
-    //Auxiliary values first
-    double p = sqrt(X*X + Y*Y);
-    double theta = atan((Z*a) / (p*b));
-
-    double sintheta = sin(theta);
-    double costheta = cos(theta);
-
-    double num = Z + eprime * eprime * b * sintheta * sintheta * sintheta;
-    double denom = p - e * e * a * costheta * costheta * costheta;
-
-    //Now calculate LLA
-    double latitude  = atan2(num, denom);
-    double longitude = atan2(Y, X);
-    double N = getN(latitude, a);
-    double altitude  = (p / cos(latitude)) - N;
-
-    if (X < 0 && Y < 0) {
-        longitude = longitude - PI;
-    }
-
-    if (X < 0 && Y > 0) {
-        longitude = longitude + PI;
-    }
-
-    latitude = radianToDegree(latitude);
-    longitude = radianToDegree(longitude);
-
-    gnss.a = latitude;
-    gnss.b = longitude;
-    gnss.c = altitude;
-
-    return gnss;
-
-    /*
+gnss_sol_t ecef2geo_(gnss_sol_t gnss){
+    
     //1
     // Output vector - Lat, Long, Height
 	// Variables
@@ -161,13 +96,13 @@ gnss_sol_t ecef2geo(gnss_sol_t gnss){
 	// Recalculate Height
 	h = (p / cos(phi_i)) - Rn;
 	// Populate output vector
-	gnss.a = phi_i;
-	gnss.b = lambda;
+	gnss.a = radianToDegree(phi_i);
+	gnss.b = radianToDegree(lambda);
 	gnss.c = h;
-	return gnss;
-    */
-    
-    /*
+	return gnss;    
+}
+
+gnss_sol_t ecef2geo(gnss_sol_t gnss){
     //2
     // WGS84 constants
     double a = 6378137.0;
@@ -193,13 +128,10 @@ gnss_sol_t ecef2geo(gnss_sol_t gnss){
         h = p/cs - N;
     }
     //llh = {'lon':clambda, 'lat':theta, 'height': h}
-    gnss.a = clambda;
-    gnss.b = theta;
+    gnss.a = radianToDegree(theta);
+    gnss.b = radianToDegree(clambda);
     gnss.c = h;
-    return gnss;*/
-
-
-
+    return gnss;
 }
 
 
@@ -212,7 +144,7 @@ LocData_t get_data(){ //SiConsulting
     time_t rawtime, ti;
     struct tm info;
 
-    geo_best = ecef2geo(best);
+    geo_best = ecef2geo_(best);
 
     data.dLat = geo_best.a;
     data.dLon = geo_best.b;
@@ -455,7 +387,11 @@ void process_solutions(int chk_sols){
             break;
     }
 
-    
+    if(coord_type){
+        if(sol[GPS].time.week != 0) gnsscopy(&sol[GPS], ecef2geo_(sol[GPS]));
+        if(sol[GALILEO].time.week != 0) gnsscopy(&sol[GALILEO], ecef2geo_(sol[GALILEO]));
+        gnsscopy(&best, ecef2geo_(best));
+    }
 
     if(logs){
         print_solution(GPS);
@@ -465,21 +401,28 @@ void process_solutions(int chk_sols){
     //Here we have the solution
 
     //Convert the position from ecef to geodetic
-    //ecef2geo(&best);
     if(is_best_found){ //cosa metto in res se non ho trovato la posizione migliore?
         output(best);
-        LocData_t res;
-        res = get_data();
-        printf("x: %lf(%lf), y: %lf(%lf), z: %lf(%lf)\n", best.a, res.dLat, best.b, res.dLon, best.c, res.dHeigth);
-        fflush(stdout);
+        /*printf("A\n");
+        printf("x: %lf, y: %lf, z: %lf\n", best.a, best.b,best.c);
+        printf("-----\n");
+        printf("l: %lf, l: %lf, h: %lf\n", res.dLat, res.dLon, res.dHeigth);
+        gnss_sol_t prova = ecef2geo_(best);
+        printf("l: %lf, l: %lf, h: %lf\n", prova.a, prova.b, prova.c);*/
+    }else if(sol[GPS].time.week != 0){
+        //DA CAPIRE MEGLIO COSA FARE QUI
+        gnsscopy(&best, sol[GPS]);
+        output(best);
+
     }else{
         fprintf(file, "no data\n");
-        fflush(file);
     }
+    fflush(file);
 
     //Flag solutions as already used
     sol[GPS].time.week = 0;
     sol[GALILEO].time.week = 0;
+    best.time.week = 0;
 
 }
 void check_termination(){
@@ -675,8 +618,6 @@ void start_processing(void){
     int i;
     char path[3][PATH_MAX];
 
-    setup();
-
 
     //DEBUG
     //initial_pos.time.week = 2032;
@@ -714,8 +655,8 @@ void start_processing(void){
         sol_file[GALILEO] = fopen(path[1], "w");
     }
 
-
-    file = fopen(FILE_PATH, "w");
+    sprintf(log_dir, "%s%s", root_path, FILE_PATH);
+    file = fopen(log_dir, "w");
     if(file == NULL){
         perror("SEMOR fopen()");
     }

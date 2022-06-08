@@ -13,6 +13,7 @@
 int relative = 0;
 int logs=1;
 int debug=1;
+int coord_type = 1;
 double init_bg_unc = 2.42406840554768e-05;
 double init_ba_unc = 0.048901633857000000;
 double psd_gyro  = 3.38802348178723e-09;
@@ -68,41 +69,17 @@ void read_conf_line(char line[MAX_LINE]){
         if(ppp_port_rtkrcv[strlen(ppp_port_rtkrcv)-1] == '\n')
             ppp_port_rtkrcv[strlen(ppp_port_rtkrcv)-1] = '\0';
         return;
-    }
-
-    if(strstr(token, "init-x")){
-        init_x = strtod(strtok(NULL, delim), &eptr);
-        if(init_x != 0){
-            init_pos |= 1;
-        }
-        return;
-    }
-    if(strstr(token, "init-y")){
-        init_y = strtod(strtok(NULL, delim), &eptr);
-        if(init_y != 0){
-            init_pos |= 2;
-        }
-        return;
-    }
-    if(strstr(token, "init-z")){
-        init_z = strtod(strtok(NULL, delim), &eptr);
-        if(init_z != 0){
-            init_pos |= 4;
-        }
-        return;
-    }
-
-    if(strstr(token, "imu-drift")){
-        imu_drift = atoi(strtok(NULL, delim));
-        return;
-    }
-    
+    }    
     if(strstr(token, "debug")){
         debug = atoi(strtok(NULL, delim));
         return;
     }
     if(strstr(token, "logs")){
         logs = atoi(strtok(NULL,delim));
+        return;
+    }
+    if(strstr(token, "coord-type")){
+        coord_type = atoi(strtok(NULL,delim));
         return;
     }
     if(strstr(token, "str2str-in")){
@@ -145,38 +122,6 @@ void read_conf_line(char line[MAX_LINE]){
         strcpy(pppconf, strtok(NULL, delim));
         if(pppconf[strlen(pppconf)-1] == '\n')
             pppconf[strlen(pppconf)-1] = '\0';
-        return;
-    }
-    if(strstr(token, "sample-rate")){
-        sample_rate = atoi(strtok(NULL, delim));
-        return;
-    }
-    if(strstr(token, "imu-init-epochs")){
-        imu_init_epochs = atoi(strtok(NULL, delim));
-        return;
-    }
-    if(strstr(token, "init-bg-unc")){
-        init_bg_unc = strtod(strtok(NULL, delim), &eptr);
-        return;
-    }
-    if(strstr(token, "init-ba-unc")){
-        init_ba_unc = strtod(strtok(NULL, delim), &eptr);
-        return;
-    }
-    if(strstr(token, "psd-gyro")){
-        psd_gyro = strtod(strtok(NULL, delim), &eptr);
-        return;
-    }
-    if(strstr(token, "psd-acce")){
-        psd_acce = strtod(strtok(NULL, delim), &eptr);
-        return;
-    }
-    if(strstr(token, "psd-bg")){
-        psd_bg = strtod(strtok(NULL, delim), &eptr);
-        return;
-    }
-    if(strstr(token, "psd-ba")){
-        psd_ba = strtod(strtok(NULL, delim), &eptr);
         return;
     }
 }
@@ -250,6 +195,7 @@ int main(int argc, char *argv[]){
         fprintf(f, "$General\n");
         fprintf(f, "debug=%d   $0:disabled (get realtime data from rtkrcv and imu), 1:enabled (get data from files (in test folder))\n", debug);
         fprintf(f, "logs=%d   $0:disabled, 1:enabled\n", logs);
+        fprintf(f, "coord-type=%d   $0:xyz, 1:llh\n", coord_type);
         fprintf(f, "str2str-path=%s\n", str2str_path);
         fprintf(f, "str2str-in=%s\n", str2str_in);
         fprintf(f, "str2str-out1-port=%s\n", str2str_out1_port);

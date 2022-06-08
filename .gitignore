@@ -7,3 +7,5 @@ bin/*.o
 build/*
 prove/*
 semor.conf
+conf/test_hugo/*
+conf/test_mattia.conf

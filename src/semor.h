@@ -22,6 +22,7 @@ extern int relative; //-r argument (to read files using relative paths)
 
 extern int logs;
 extern int debug;
+extern int coord_type; //0 xyz, 1 llh
 extern double init_bg_unc;
 extern double init_ba_unc;
 extern double psd_gyro;
