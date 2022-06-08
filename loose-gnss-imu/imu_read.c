@@ -458,14 +458,14 @@ int get_imu_data(char line[IMU_LENGTH]){
 		else{
 			sec += (stamp-last_stamp) * 0.000025;
 		}
-		nsamples += 1;
+		/*nsamples += 1;
 		tot_acc_x += ax*acclUnits*gravity;
 		tot_acc_y += ay*acclUnits*gravity;
-		tot_acc_z += az*acclUnits*gravity;
+		tot_acc_z += az*acclUnits*gravity;*/
 		sprintf(line, "%d %lf %7.4f %7.4f %7.4f %8.3f %8.3f %8.3f | %10u", week,
 			sec,
 			/*ax,ay,az, gx,gy,gz,*/
-			ax*acclUnits*gravity-avg_acc_x, ay*acclUnits*gravity-avg_acc_y, az*acclUnits*gravity-avg_acc_z,
+			ax*acclUnits*gravity/*-avg_acc_x*/, ay*acclUnits*gravity/*-avg_acc_y*/, az*acclUnits*gravity/*-avg_acc_z*/,
 			gx*gyroUnits, gy*gyroUnits, gz*gyroUnits, stamp);
 		
 		last_stamp = stamp;

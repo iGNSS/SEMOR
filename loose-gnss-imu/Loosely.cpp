@@ -293,7 +293,11 @@ void closeF(){
 	out.close();
 }
 
+int continuePrint = 0;
+
 void print(MatrixXd m){
+	if(!continuePrint)
+		return;
 	stringstream ss;
 	for(int i=0; i<m.rows(); i++){
 		for(int j=0; j<m.cols(); j++){
@@ -306,6 +310,8 @@ void print(MatrixXd m){
 }
 
 void print(Matrix3d m){
+	if(!continuePrint)
+		return;
 	stringstream ss;
 	for(int i=0; i<3; i++){
 		for(int j=0; j<3; j++){
@@ -318,6 +324,8 @@ void print(Matrix3d m){
 }
 
 void print(Vector3d v){
+	if(!continuePrint)
+		return;
 	stringstream ss;
 	for(int i=0; i<3; i++){
 		for(int j=0; j<1; j++){
@@ -330,6 +338,8 @@ void print(Vector3d v){
 }
 
 void print(VectorXd v){
+	if(!continuePrint)
+		return;
 	stringstream ss;
 	for(int i=0; i<v.rows(); i++){
 		for(int j=0; j<1; j++){
@@ -342,6 +352,8 @@ void print(VectorXd v){
 }
 
 void print(double value){
+	if(!continuePrint)
+		return;
 	cout << value << endl;
 	cout.flush();
 }
@@ -715,7 +727,7 @@ void calculateSTD(gnss_sol_t* int_sol){
 		dw0 << -0.004286024305556, -0.024490017361111, 0.126399739583333;*/
 
 		//Debug print
-		printf("AA: %lf %lf %lf\n", va(0), va(1), va(2));
+		//printf("AA: %lf %lf %lf\n", va(0), va(1), va(2));
 		(*int_sol).sda = va(0);
 		(*int_sol).sdb = va(1);
 		(*int_sol).sdc = va(2);
@@ -872,7 +884,7 @@ void calculateSTD(gnss_sol_t* int_sol){
 		}
 
 		//Debug print
-		printf("AA: %lf %lf %lf\n", va(0), va(1), va(2));
+		//printf("AA: %lf %lf %lf\n", va(0), va(1), va(2));
 
 		(*int_sol).sda = va(0);
 		(*int_sol).sdb = va(1);
@@ -888,6 +900,7 @@ void calculateSTD(gnss_sol_t* int_sol){
 void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 	//Check if imu is initializing
 	if(imu_ready == 0){
+		int n = 0;
 		while(OBSimu._IMUdata.imuTime < (*int_sol).time.sec){ //read whole imu date of a particular gnss epoch
 			if(imu_ready == 0 && iniIMU.stepInitializeIMU(OBSimu, IMU_INI_TIME_END, _LLH_o) == 1){ //it calculates _ACCbias and _GYRbias, _RPY
 				_dT = 1.0;
@@ -900,14 +913,17 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 			if(imu_ready == 1){
 				imu_ready = 2;
 				(*int_sol).time.week = OBSimu._IMUdata.week;
-				avg_acc_x = tot_acc_x/((double)nsamples);
+				/*avg_acc_x = tot_acc_x/((double)nsamples);
 				avg_acc_y = tot_acc_y/((double)nsamples);
 				avg_acc_z = tot_acc_z/((double)nsamples);
 
-				printf("%lf - %lf - %lf\n", avg_acc_x, avg_acc_y, avg_acc_z);
+				printf("%lf - %lf - %lf\n", avg_acc_x, avg_acc_y, avg_acc_z);*/
 			}
 			_epochIMU = OBSimu._IMUdata.imuTime;
+			n++;
 		}
+		cout << n << endl;
+		cout.flush();
 		return;
 	}
 	//IMU is ready:
@@ -922,6 +938,7 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 		first = 0;
 	}
 	//here we have previous gnss position
+	int n = 0;
 	do {
 		read_imu();
 
@@ -942,8 +959,10 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 		//Update Time
 		_epochIMU = OBSimu._IMUdata.imuTime;
 
-
+		n++;
 	} while (_epochIMU <= (*int_sol).time.sec);
+	cout << n << endl;
+	cout.flush();
 
 	GNSS_pos << (*int_sol).a , (*int_sol).b, (*int_sol).c;
 	GNSS_vel << 0, 0, 0;
