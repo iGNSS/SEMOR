@@ -1,5 +1,6 @@
 ### Importante per SiC
 Se get_data() ritorna una soluzione  con dLat uguale a -1 allora c'è un mancato posizionamento per quell'epoca. Quindi ignorare/skippare quell'output.
+Se, invece di usare get_data() si leggesse da file, fare la stessa cosa se output.txt contiene no-data nella linea corrente.
 
 
 

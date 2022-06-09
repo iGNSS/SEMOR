@@ -415,7 +415,8 @@ void process_solutions(int chk_sols){
         output(best);
 
     }else{
-        fprintf(file, "no data\n");
+        best.a = -1;
+        fprintf(file, "no-data\n");
     }
     fflush(file);
 
@@ -540,6 +541,7 @@ void handle_connection(){
 
 
     while(1){
+        first_input = 0;
         check_sols = 0;
         //usleep(300000);
         ret = poll(fds, 3, timeout_msecs); //wait for events on the 3 fds
@@ -589,9 +591,9 @@ void handle_connection(){
             }
         }
 
-        if(first_input < 3){ //Go on when we have input from both RTK and PPP
+        /*if(first_time && first_input < 3){ //Go on when we have input from both RTK and PPP
             continue;
-        }
+        }*/
         if(first_time){
             first_time = 0;
             printf("SEMOR: End initialization\n");
