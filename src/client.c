@@ -401,7 +401,7 @@ void process_solutions(int chk_sols){
     //Here we have the solution
 
     //Convert the position from ecef to geodetic
-    if(is_best_found){ //cosa metto in res se non ho trovato la posizione migliore?
+    if(is_best_found && chk_sols != 1){
         output(best);
         /*printf("A\n");
         printf("x: %lf, y: %lf, z: %lf\n", best.a, best.b,best.c);
@@ -591,9 +591,10 @@ void handle_connection(){
             }
         }
 
-        /*if(first_time && first_input < 3){ //Go on when we have input from both RTK and PPP
+        if(first_time && sol[GPS].time.week == 0){
             continue;
-        }*/
+        }
+
         if(first_time){
             first_time = 0;
             printf("SEMOR: End initialization\n");
