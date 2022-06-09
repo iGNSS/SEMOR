@@ -144,7 +144,7 @@ LocData_t get_data(){ //SiConsulting
     time_t rawtime, ti;
     struct tm info;
 
-    geo_best = ecef2geo_(best);
+    geo_best = best;
 
     data.dLat = geo_best.a;
     data.dLon = geo_best.b;
@@ -387,7 +387,7 @@ void process_solutions(int chk_sols){
             break;
     }
 
-    if(coord_type){
+    if(/*coord_type*/0){
         if(sol[GPS].time.week != 0) gnsscopy(&sol[GPS], ecef2geo_(sol[GPS]));
         if(sol[GALILEO].time.week != 0) gnsscopy(&sol[GALILEO], ecef2geo_(sol[GALILEO]));
         gnsscopy(&best, ecef2geo_(best));

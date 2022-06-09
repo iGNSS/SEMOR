@@ -13,7 +13,7 @@
 int relative = 0;
 int logs=1;
 int debug=1;
-int coord_type = 1;
+int coord_type = 0; //0:ecef, 1:llh
 double init_bg_unc = 2.42406840554768e-05;
 double init_ba_unc = 0.048901633857000000;
 double psd_gyro  = 3.38802348178723e-09;
@@ -195,7 +195,7 @@ int main(int argc, char *argv[]){
         fprintf(f, "$General\n");
         fprintf(f, "debug=%d   $0:disabled (get realtime data from rtkrcv and imu), 1:enabled (get data from files (in test folder))\n", debug);
         fprintf(f, "logs=%d   $0:disabled, 1:enabled\n", logs);
-        fprintf(f, "coord-type=%d   $0:xyz, 1:llh\n", coord_type);
+        //fprintf(f, "coord-type=%d   $0:xyz, 1:llh\n", coord_type);
         fprintf(f, "str2str-path=%s\n", str2str_path);
         fprintf(f, "str2str-in=%s\n", str2str_in);
         fprintf(f, "str2str-out1-port=%s\n", str2str_out1_port);
