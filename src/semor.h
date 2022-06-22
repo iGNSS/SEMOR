@@ -13,7 +13,7 @@
 
 #define MAXSTR 512
 #define LEAP_SECONDS 18
-#define IMU_LENGTH 100 //length of imu data string
+#define IMU_LENGTH 200 //length of imu data string
 #define GPS_EPOCH 315964800 /* 6th January 1980*/
 
 extern char root_path[PATH_MAX-200];

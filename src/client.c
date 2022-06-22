@@ -58,6 +58,8 @@ int first_time = 1;
 
 char log_dir[PATH_MAX/2];
 
+char deb_string[300];
+
 
 gnss_sol_t ecef2geo(gnss_sol_t gnss){
 
@@ -327,6 +329,9 @@ void gnss_avg_2(gnss_sol_t sol1, gnss_sol_t sol2){
     best.sdab = sqrt(pow(sol1.sdab/2, 2) + pow(sol2.sdab/2, 2));
     best.sdbc = sqrt(pow(sol1.sdbc/2, 2) + pow(sol2.sdbc/2, 2));
     best.sdca = sqrt(pow(sol1.sdca/2, 2) + pow(sol2.sdca/2, 2));
+
+    best.time.week = sol1.time.week;
+    best.time.sec = sol1.time.sec;
 }
 
 void gnss_avg_3(gnss_sol_t sol1, gnss_sol_t sol2, gnss_sol_t sol3){
@@ -348,6 +353,9 @@ void gnss_avg_3(gnss_sol_t sol1, gnss_sol_t sol2, gnss_sol_t sol3){
     best.sdab = sqrt(pow(sol1.sdab/3, 2) + pow(sol2.sdab/3, 2) + pow(sol3.sdab/3, 2));
     best.sdbc = sqrt(pow(sol1.sdbc/3, 2) + pow(sol2.sdbc/3, 2) + pow(sol3.sdbc/3, 2));
     best.sdca = sqrt(pow(sol1.sdca/3, 2) + pow(sol2.sdca/3, 2) + pow(sol3.sdca/3, 2));
+
+    best.time.week = sol1.time.week;
+    best.time.sec = sol1.time.sec;
 }
 
 int get_best_sol2(int sol1_idx, int sol2_idx){ //if 2 gnss solutions available - 0: no best found, 1: best found
@@ -382,8 +390,10 @@ int get_best_sol_3(){ //if 3 solutions available - 0: no best found, 1: best fou
 }
 
 void process_solutions(int chk_sols){
+    printf("process_solutions()\n");
     int i;
     int is_best_found = 1;
+    char g[200];
 
     if(debug){
         for(i = 0; i < 2; i++){ //for each gnss solution check if its epoch is higher than the "seconds" variable, if so wait next iterations 
@@ -406,9 +416,12 @@ void process_solutions(int chk_sols){
         }
     }
     if(!imu_ready){
-        gnsscopy(&sol[IMU], sol[GPS]);
-        imu_sol(&sol[IMU]); //this takes 1 second
+        //gnsscopy(&sol[IMU], sol[GPS]);
         sol[IMU].time.sec++;
+        imu_sol(&sol[IMU]); //this takes 1 second
+        gnss2str(g, sol[IMU]);
+        //printf("%s\n", g);
+        //fflush(stdout);
         return;
     }
 
@@ -436,24 +449,19 @@ void process_solutions(int chk_sols){
             break;
         case 5: //GPS and IMU
             is_best_found = get_best_sol2(GPS, IMU);
-            best.time.week = sol[GPS].time.week;
-            best.time.sec = sol[GPS].time.sec;
             break;
         case 6: //GALILEO and IMU
             is_best_found = get_best_sol2(GALILEO, IMU);
-            best.time.week = sol[GALILEO].time.week;
-            best.time.sec = sol[GALILEO].time.sec;
             break;
         case 7: //all solutions available
             is_best_found = get_best_sol_3();
-            best.time.week = sol[GPS].time.week;
-            best.time.sec = sol[GPS].time.sec;
             break;
     }
 
     
 
     if(logs && (imu_ready >= 1)){
+        printf("log\n");
         print_solution(GPS);
         print_solution(GALILEO);
         print_solution(IMU);
@@ -475,6 +483,7 @@ void process_solutions(int chk_sols){
     //Output
     if(!is_best_found){
         gnsscopy(&best, sol[IMU]);
+        printf("no best found\n");
     }
 
     //Here we have the solution
@@ -484,7 +493,7 @@ void process_solutions(int chk_sols){
     output(best);
     LocData_t res;
     res = get_data();
-    printf("x: %lf(%lf), y: %lf(%lf), z: %lf(%lf)\n", best.a, res.dLat, best.b, res.dLon, best.c, res.dHeigth);
+    //printf("x: %lf(%lf), y: %lf(%lf), z: %lf(%lf)\n", best.a, res.dLat, best.b, res.dLon, best.c, res.dHeigth);
     fflush(stdout);
     //printf("%s\n", res.ui8TS);
 
@@ -501,7 +510,7 @@ void process_solutions(int chk_sols){
     gnsscopy(&sol[IMU], best);
     sol[IMU].time.week = 0;
     sol[IMU].time.sec += 1; //Get imu position of the next second
-    imu_sol(&sol[IMU]); //this runs until next second
+    imu_sol(&sol[IMU]); //this runs at least until raw IMU timestamp < next second
 
 }
 void check_termination(){
@@ -589,6 +598,7 @@ void handle_connection(){
     int ret;
     int i;
     struct pollfd fds[3];
+    struct pollfd fds1[2][1];
     int timeout_msecs = 1000;
     int check_sols = 0; //3 if both rtk and ppp are read, 1 if only rtk read, 2 if only ppp and 0 if none
     int galileo_ready = 0;
@@ -611,6 +621,10 @@ void handle_connection(){
     fds[1].fd = socketfd[GALILEO];
     fds[2].fd = STDIN_FILENO;
     fds[0].events = fds[1].events = fds[2].events = POLLIN;
+
+    fds1[GPS][0].fd = socketfd[GPS];
+    fds1[GALILEO][0].fd = socketfd[GALILEO];
+    fds1[GPS][0].events = fds1[GALILEO][0].events = POLLIN;
 
     //fcntl(0, F_SETFL, fcntl(0, F_GETFL) | O_NONBLOCK);
 
@@ -636,8 +650,13 @@ void handle_connection(){
                 //strcpy(buf[i], "");
                 //memset(buf[i], 0, sizeof buf);
                 //strncpy(dest_string,"",strlen(dest_string));
-            usleep(150000); //gives time to the solutions to be read (if one of them is late)
+
+            //usleep(150000); //gives time to the solutions to be read (if one of them is late)
+            ret = poll(fds1[i], 1, 150000); //wait for events on the 3 fds
+            /* if(i == 0)
+                usleep(9000); */
             //ret = poll(fds, 3, timeout_msecs);
+
             if(1/*fds[i].revents & POLLIN*/){
                 if(debug && wait_read[i]){ //Don't read solution i (0:GPS, 1:GALILEO) if the solution in the previous iterations has a higher epoch than "seconds" variable
                     continue;
@@ -670,7 +689,7 @@ void handle_connection(){
             }
         }
 
-        if(first_input < 3){
+        if(first_time && first_input < 1){ //ci deve essere almeno la soluzione RTK all'inizio
             continue;
         }
 
@@ -681,20 +700,17 @@ void handle_connection(){
         }
 
         if(first_time){
+            printf("SEMOR: connection established with rtkrcv\nwait %d seconds for the IMU to initialize...\n", imu_init_epochs);
             //Initialize imu epoch
 
-            struct timeval tv;
-            gettimeofday(&tv, NULL);
-            int week = ((tv.tv_sec+LEAP_SECONDS-GPS_EPOCH))/(7*24*3600);
-            int sec = (double)(((tv.tv_sec+LEAP_SECONDS-GPS_EPOCH))%(7*24*3600))+(tv.tv_usec / 1000000.0);
-
-            sol[IMU].time.week = week;
-            sol[IMU].time.sec = sec;
+            sol[IMU].time.week = sol[GPS].time.week;
+            sol[IMU].time.sec = sol[GPS].time.sec;
 
             if(debug){
                 sol[IMU].time.sec = seconds;
             }
             init_imu(sol[IMU]);
+            printf("finito init_imu()\n");
             //initial_pos.time.sec++;
             first_time = 0;
         }
@@ -717,6 +733,10 @@ void start_processing(void){
     sol[IMU].a = init_x;
     sol[IMU].b = init_y;
     sol[IMU].c = init_z;
+
+    sol[IMU].sda = 0;
+    sol[IMU].sdb = 0;
+    sol[IMU].sdc = 0;
 
     sol[IMU].va = 0;
     sol[IMU].vb = 0;

@@ -287,8 +287,8 @@ int main(int argc, char *argv[]){
     imu_ready = 0;
     if(!debug){
         char *const str2str_args[] = {str2str_path, "-in", str2str_in, "-out", str2str_out1_port, "-out", str2str_out2_port, NULL};
-        char *const rtkrcv1_args[] = {rtkrcv_path, "-s", "-o", rtkconf, NULL}; //rtk4pid.conf
-        char *const rtkrcv2_args[] = {rtkrcv_path, "-s", "-o", pppconf, NULL}; //ppp4pid_navcast.conf
+        char *const rtkrcv1_args[] = {rtkrcv_path, "-s", "-o", rtkconf, "-d", "/dev/null", NULL}; //rtk4pid.conf
+        char *const rtkrcv2_args[] = {rtkrcv_path, "-s", "-o", pppconf, "-d", "/dev/null", NULL}; //ppp4pid_navcast.conf
 
         //Execute str2str
         if ((str2str_pid = fork()) == -1){

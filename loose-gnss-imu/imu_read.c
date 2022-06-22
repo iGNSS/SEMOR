@@ -342,7 +342,7 @@ int setup(){
 	#if USE_FIFO
 		i2c_buf[1] = 0;
 		i2c_buf[2] = 0;
-		i2c_buf[3] = FIFO_BDR_ACC_208Hz | FIFO_BDR_GYRO_208Hz;
+		i2c_buf[3] = FIFO_BDR_ACC_104Hz | FIFO_BDR_GYRO_104Hz;
 	#if ADD_STAMP
 		i2c_buf[4] = FIFO_MODE_CONTINUOUS | FIFO_TS_DEC_BY_1;
 	#else
@@ -395,85 +395,96 @@ int setup(){
 	#endif
 
 int get_imu_data(char line[IMU_LENGTH]){
+	printf("imu_read()\n");
+	int n;
 	if(need_setup){
 		setup();
 		need_setup = 0;
 	}
-
-	i2c_buf[0] = FIFO_STATUS1;
-	if (i2c_write(1) != 1)
-		return 1;
-	if (i2c_read(2) != 2)
-		return 1;
-//	number of unread data
-	int n = i2c_buf[0] | (i2c_buf[1] & 3) << 8;
-	if(n == 0)
-		return 1; //try again, no data right now
-	i2c_buf[0] = FIFO_DATA_OUT_TAG;
-	if (i2c_write(1) != 1)
-		return 1;
-	if (i2c_read(7) != 7)
-		return 1;
-	//printf("%02X:%02X%02X:%02X%02X:%02X%02X\n", i2c_buf[0], i2c_buf[1], i2c_buf[2], i2c_buf[3], i2c_buf[4], i2c_buf[5], i2c_buf[6]);
-	switch (i2c_buf[0] >> 3)
-	{
-	case ACCELEROMETER_DATA:
-	case ACCELERTOMETER_DATA_T_1:
-	case ACCELERTOMETER_DATA_T_2:
-	case ACCELERTOMETER_DATA_2xC:
-	case ACCELERTOMETER_DATA_3xC:
-		ax = i2c_buf[1] | i2c_buf[2] << 8;
-		ay = i2c_buf[3] | i2c_buf[4] << 8;
-		az = i2c_buf[5] | i2c_buf[6] << 8;
-		flags |= 1;
-		break;
-	case GYROSCOPE_DATA:
-	case GYRO_DATA_T_1:
-	case GYRO_DATA_T_2:
-	case GYRO_DATA_2xC:
-	case GYRO_DATA_3xC:
-		gx = i2c_buf[1] | i2c_buf[2] << 8;
-		gy = i2c_buf[3] | i2c_buf[4] << 8;
-		gz = i2c_buf[5] | i2c_buf[6] << 8;
-		flags |= 2;
-		break;
-	case TIMESTAMP_DATA:
-		stamp = i2c_buf[1] | i2c_buf[2] << 8 | i2c_buf[3] << 16 | i2c_buf[4] << 24;
-		flags |= 4;
-		break;
-	default:
-		printf("TAG %02X\n", i2c_buf[0]);
+	while(1){
+		i2c_buf[0] = FIFO_STATUS1;
+		if (i2c_write(1) != 1)
+			continue;
+		if (i2c_read(2) != 2)
+			continue;
+	//	number of unread data
+		n = i2c_buf[0] | (i2c_buf[1] & 3) << 8;
+		if(n < 3)
+			continue; //try again, no data right now
 		break;
 	}
-	if (flags == 7)
-	{
-		flags = 0;
-		if(first_read){
-			struct timeval tv;
-			gettimeofday(&tv, NULL);
-			week = ((tv.tv_sec+LEAP_SECONDS-GPS_EPOCH))/(7*24*3600);
-			sec = (double)(((tv.tv_sec+LEAP_SECONDS-GPS_EPOCH))%(7*24*3600))+(tv.tv_usec / 1000000.0);
-			first_read = 0;
+	while(1){ //exit when return
+		i2c_buf[0] = FIFO_DATA_OUT_TAG;
+		if (i2c_write(1) != 1)
+			continue;
+		if (i2c_read(7) != 7)
+			continue;
+		//printf("%02X:%02X%02X:%02X%02X:%02X%02X\n", i2c_buf[0], i2c_buf[1], i2c_buf[2], i2c_buf[3], i2c_buf[4], i2c_buf[5], i2c_buf[6]);
+		switch (i2c_buf[0] >> 3)
+		{
+		case ACCELEROMETER_DATA:
+		case ACCELERTOMETER_DATA_T_1:
+		case ACCELERTOMETER_DATA_T_2:
+		case ACCELERTOMETER_DATA_2xC:
+		case ACCELERTOMETER_DATA_3xC:
+			ax = i2c_buf[1] | i2c_buf[2] << 8;
+			ay = i2c_buf[3] | i2c_buf[4] << 8;
+			az = i2c_buf[5] | i2c_buf[6] << 8;
+			flags |= 1;
+			break;
+		case GYROSCOPE_DATA:
+		case GYRO_DATA_T_1:
+		case GYRO_DATA_T_2:
+		case GYRO_DATA_2xC:
+		case GYRO_DATA_3xC:
+			gx = i2c_buf[1] | i2c_buf[2] << 8;
+			gy = i2c_buf[3] | i2c_buf[4] << 8;
+			gz = i2c_buf[5] | i2c_buf[6] << 8;
+			flags |= 2;
+			break;
+		case TIMESTAMP_DATA:
+			stamp = i2c_buf[1] | i2c_buf[2] << 8 | i2c_buf[3] << 16 | i2c_buf[4] << 24;
+			flags |= 4;
+			break;
+		default:
+			printf("TAG %02X\n", i2c_buf[0]);
+			break;
 		}
-		else{
-			sec += (stamp-last_stamp) * 0.000025;
+		if (flags == 7)
+		{
+			flags = 0;
+			if(first_read){
+				struct timeval tv;
+				gettimeofday(&tv, NULL);
+				week = ((tv.tv_sec+LEAP_SECONDS-GPS_EPOCH))/(7*24*3600);
+				sec = (double)(((tv.tv_sec+LEAP_SECONDS-GPS_EPOCH))%(7*24*3600))+(tv.tv_usec / 1000000.0);
+				//first_read = 0;
+			}
+			else{
+				sec += (stamp-last_stamp) * 0.000025;
+			}
+
+			struct timeval tvv;
+            gettimeofday(&tvv, NULL);
+            int week1 = ((tvv.tv_sec+LEAP_SECONDS-GPS_EPOCH))/(7*24*3600);
+            double sec1 = (double)(((tvv.tv_sec+LEAP_SECONDS-GPS_EPOCH))%(7*24*3600))+(tvv.tv_usec / 1000000.0);
+			/*nsamples += 1;
+			tot_acc_x += ax*acclUnits*gravity;
+			tot_acc_y += ay*acclUnits*gravity;
+			tot_acc_z += az*acclUnits*gravity;*/
+			sprintf(line, "%d %lf %7.4f %7.4f %7.4f %8.3f %8.3f %8.3f | %10u %d | (preso: %lf)", week,
+				sec,
+				/*ax,ay,az, gx,gy,gz,*/
+				ax*acclUnits*gravity/*-avg_acc_x*/, ay*acclUnits*gravity/*-avg_acc_y*/, az*acclUnits*gravity/*-avg_acc_z*/,
+				gx*gyroUnits, gy*gyroUnits, gz*gyroUnits, stamp, n, sec1);
+			
+			last_stamp = stamp;
+
+			return 0;
+
+			//printf("%10u: %6d %6d %6d | %6d %6d %6d || %7.4f %7.4f %7.4f | %8.3f %8.3f %8.3f\n",
+
 		}
-		/*nsamples += 1;
-		tot_acc_x += ax*acclUnits*gravity;
-		tot_acc_y += ay*acclUnits*gravity;
-		tot_acc_z += az*acclUnits*gravity;*/
-		sprintf(line, "%d %lf %7.4f %7.4f %7.4f %8.3f %8.3f %8.3f | %10u", week,
-			sec,
-			/*ax,ay,az, gx,gy,gz,*/
-			ax*acclUnits*gravity/*-avg_acc_x*/, ay*acclUnits*gravity/*-avg_acc_y*/, az*acclUnits*gravity/*-avg_acc_z*/,
-			gx*gyroUnits, gy*gyroUnits, gz*gyroUnits, stamp);
-		
-		last_stamp = stamp;
-
-		return 0;
-
-		//printf("%10u: %6d %6d %6d | %6d %6d %6d || %7.4f %7.4f %7.4f | %8.3f %8.3f %8.3f\n",
-
 	}
 	return 1;
 }

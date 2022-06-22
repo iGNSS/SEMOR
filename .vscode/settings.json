@@ -85,7 +85,9 @@
         "jacobi": "cpp",
         "lu": "cpp",
         "qr": "cpp",
-        "svd": "cpp"
+        "svd": "cpp",
+        "rtklib.h": "c",
+        "math.h": "c"
     },
     "C_Cpp.errorSquiggles": "Enabled"
 }

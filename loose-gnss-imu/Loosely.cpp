@@ -12,6 +12,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <sys/time.h>
 
 using namespace std;
 using namespace Eigen;
@@ -189,6 +190,13 @@ void Loosely::close_out_file(){
 	out.close();
 }
 
+void print_time(){
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	int week = ((tv.tv_sec+LEAP_SECONDS-GPS_EPOCH))/(7*24*3600);
+	double sec = (double)(((tv.tv_sec+LEAP_SECONDS-GPS_EPOCH))%(7*24*3600))+(tv.tv_usec / 1000000.0);
+	printf("%lf\n", sec);
+}
 
 void read_imu(){
 	string line;
@@ -200,7 +208,13 @@ void read_imu(){
 	}
 	else{
 		char buf[IMU_LENGTH];
-		while(get_imu_data(buf) == 1){}; //while no imu data or errors reading imu data
+
+		get_imu_data(buf);
+
+		//while(get_imu_data(buf) != 0){
+		//	out << "0" << endl;
+		//	out.flush();
+		//} //while no imu data or errors reading imu data
 		line = string(buf);
 	}
 
@@ -214,80 +228,6 @@ void read_imu(){
 	OBSimu.clearObs();
 	OBSimu.obsEpoch(line);
 }
-
-// Function
-/*bool Loosely::isValid(string observation_filepath) {
-	ifstream fin(observation_filepath);
-	if (!fin.good()) {
-		return false;
-		cout << "File does not exist ->> No File for reading";
-		exit(1);
-	}
-	else {
-		return true;
-	}
-}
-
-// A function to initialize output text file
-void initialOutput(ofstream& fout, vector<double> iniPOS) {
-	fout << "\n\tEPOCHWISE SOLUTIONS FOR THE TRADITIONAL INTEGRATION STRATEGY.\n"
-		<< "\tInitial Estimate of Receiver Position : \n" << std::left << std::fixed << std::setprecision(3)
-		<< std::setw(15) << "\tX (m): " << std::setw(15) << iniPOS.at(0) << "\n"
-		<< std::setw(15) << "\tY (m): " << std::setw(15) << iniPOS.at(1) << "\n"
-		<< std::setw(15) << "\tZ (m): " << std::setw(15) << iniPOS.at(2) << "\n"
-		<< "---------------------------------------------------------------------------------------------------------------------"
-		<< "---------------------------------------------------------------------------------------------------------------------" << "\n"
-		<< "\t|| Loose GNSS-IMU Integration ||" << "\n"
-		<< "---------------------------------------------------------------------------------------------------------------------"
-		<< "---------------------------------------------------------------------------------------------------------------------" << "\n"
-		<< std::setw(12) << "EPOCH"
-		<< std::setw(15) << "X(m)" << std::setw(15) << "Y(m)" << std::setw(15) << "Z(m)"
-		<< std::setw(15) << "Vx(m/s)" << std::setw(15) << "Vy(m/s)" << std::setw(15) << "Vz(m/s)"
-		<< std::setw(15) << "Tx(deg)" << std::setw(15) << "Ty(deg)" << std::setw(15) << "Tz(deg)"
-		<< "\n"
-		<< "---------------------------------------------------------------------------------------------------------------------"
-		<< "---------------------------------------------------------------------------------------------------------------------" << "\n";
-}
-
-// A function to output epochwise solution into an organized text file
-void Loosely::epochOutput(ofstream& fout) {
-	// Normalize attitude
-	double r = rad2deg(IMUsol.attXYZ.at(0));
-	double p = rad2deg(IMUsol.attXYZ.at(1));
-	double h = rad2deg(IMUsol.attXYZ.at(2));
-	// Posting Results to Output File
-	fout << std::left << std::fixed << std::setprecision(3)
-		<< std::setw(12) << _epochTime
-		<< std::setw(15) << INTsol.posXYZ.at(0) << std::setw(15) << INTsol.posXYZ.at(1) << std::setw(15) << INTsol.posXYZ.at(2)
-		<< std::setw(15) << INTsol.velXYZ.at(0) << std::setw(15) << INTsol.velXYZ.at(1) << std::setw(15) << INTsol.velXYZ.at(2)
-		<< std::setw(15) << r << std::setw(15) << p << std::setw(15) << h
-		<< "\n";
-}
-
-// A function to output epochwise solution into an organized text file
-void Loosely::epochOutputIMU(ofstream& fout) {
-	// Normalize attitude
-	double r = rad2deg(IMUsol.attXYZ.at(0));
-	double p = rad2deg(IMUsol.attXYZ.at(1));
-	double h = rad2deg(IMUsol.attXYZ.at(2));
-	// Posting Results to Output File
-	fout << std::left << std::fixed << std::setprecision(3)
-		<< std::setw(12) << _epochIMU
-		<< std::setw(15) << IMUsol.posXYZ.at(0) << std::setw(15) << IMUsol.posXYZ.at(1) << std::setw(15) << IMUsol.posXYZ.at(2)
-		<< std::setw(15) << IMUsol.velXYZ.at(0) << std::setw(15) << IMUsol.velXYZ.at(1) << std::setw(15) << IMUsol.velXYZ.at(2)
-		<< std::setw(15) << r << std::setw(15) << p << std::setw(15) << h
-		<< "\n";
-}
-
-// A function to output epochwise solution into an organized text file
-void Loosely::epochOutputGPS(ofstream& fout) {
-	// Posting Results to Output File
-	fout << std::left << std::fixed << std::setprecision(3)
-		<< std::setw(12) << _epochGNSS
-		<< std::setw(15) << GNSSsol.posXYZ.at(0) << std::setw(15) << GNSSsol.posXYZ.at(1) << std::setw(15) << GNSSsol.posXYZ.at(2)
-		<< std::setw(15) << GNSSsol.velXYZ.at(0) << std::setw(15) << GNSSsol.velXYZ.at(1) << std::setw(15) << GNSSsol.velXYZ.at(2)
-		<< "\n";
-}*/
 
 void closeF(){
 	out.close();
@@ -371,41 +311,6 @@ void Loosely::SolutionIMU(ReaderIMU IMU, IMUmechECEF& MechECEF) {
 	IMUsol.attXYZ = MechECEF._att;		//Update IMU solution
 	_Heading_imu = normalise(IMUsol.attXYZ.at(2), 0, 2 * PI);
 }
-
-// A routine to organize GNSS solution from file
-/*void Loosely::SolutionGNSS(ReaderGNSS GNSS) {
-	// Compute time interval
-	_dT = GNSS._GNSSdata.gpsTime - _epochGNSS;
-	// Update solution
-	_epochGNSS = GNSS._GNSSdata.gpsTime;
-	GNSSsol.posXYZ = eigVector2std(GNSS._GNSSdata.Pxyz);
-	GNSSsol.velXYZ = eigVector2std(GNSS._GNSSdata.Vxyz);
-}
-
-// A routine to process observations for integrated position solution
-void Loosely::LooseCoupling(ReaderGNSS &GNSS, IMUmechECEF& Mech) {
-	// Time interval
-	_dT = 0.001;
-	// Loose Coupling Kalman Filter
-	LooseKF KF(Mech, _dT);
-	KF.SetObs(GNSS, Mech);
-	KF.Filter(Mech);
-	// Update solution
-	_epochTime = GNSSsol.epoch;
-	INTsol.posXYZ = KF.sol.posXYZ;
-	INTsol.velXYZ = KF.sol.velXYZ;
-	INTsol.attXYZ = KF.sol.attXYZ;
-	INTsol.df = KF.sol.df;
-	INTsol.dw = KF.sol.dw;
-	// Update IMU Position
-	Mech._pos = INTsol.posXYZ;
-	Mech._vel = INTsol.velXYZ;
-	Mech._att = INTsol.attXYZ;
-	Mech._fbias = INTsol.df;
-	Mech._gbias = INTsol.dw;
-	// Add heading corrections below for improved results...
-
-}*/
 
 VectorXd double2eigVector(double a, double b, double c){
 	VectorXd v = VectorXd::Zero(3);
@@ -896,12 +801,24 @@ void calculateSTD(gnss_sol_t* int_sol){
 	}
 	//STANDARD DEVIATION END
 }
+int deb_enabled = 1;
+void deb(char message[300]){
+    if(deb_enabled){
+        printf("%s\n", message);
+    }
+}
 
 void Loosely::get_imu_sol(gnss_sol_t* int_sol){
+	printf("get_imu_sol()\n");
+	 /* struct timeval tv;
+            gettimeofday(&tv, NULL);
+            int week = ((tv.tv_sec+LEAP_SECONDS-GPS_EPOCH))/(7*24*3600);
+            double sec = (double)(((tv.tv_sec+LEAP_SECONDS-GPS_EPOCH))%(7*24*3600))+(tv.tv_usec / 1000000.0);
+	printf("to process: %d | now: %lf\n", (*int_sol).time.sec, sec); */
 	//Check if imu is initializing
 	if(imu_ready == 0){
 		int n = 0;
-		while(OBSimu._IMUdata.imuTime < (*int_sol).time.sec){ //read whole imu date of a particular gnss epoch
+		while(/* n < 104 */ OBSimu._IMUdata.imuTime < (*int_sol).time.sec){ //read whole imu date of a particular gnss epoch
 			if(imu_ready == 0 && iniIMU.stepInitializeIMU(OBSimu, IMU_INI_TIME_END, _LLH_o) == 1){ //it calculates _ACCbias and _GYRbias, _RPY
 				_dT = 1.0;
 				// Initialize IMU Mechanization
@@ -922,8 +839,8 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 			_epochIMU = OBSimu._IMUdata.imuTime;
 			n++;
 		}
-		cout << n << endl;
-		cout.flush();
+		//cout << n << endl;
+		//cout.flush();
 		return;
 	}
 	//IMU is ready:
@@ -933,193 +850,49 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 	_LLH_o = eigVector2std(ecef2geo(double2eigVector((*int_sol).a, (*int_sol).b, (*int_sol).c)));	
 	_ECEF_imu = _ECEF_o;
 	GNSSsol.velXYZ = eigVector2std(double2eigVector((*int_sol).va, (*int_sol).vb, (*int_sol).vc));
-	if(1){
+	/*if(1){
 		MechECEF.InitializeMechECEF(_ECEF_imu, _LLH_o, GNSSsol.velXYZ, iniIMU._RPY, iniIMU._ACCbias, iniIMU._GYRbias);
 		first = 0;
-	}
+	}*/
 	//here we have previous gnss position
+
+
+
+	//print_time();
+	
+	
 	int n = 0;
 	do {
-		read_imu();
-
+		//Here I already have the first sample of this epoch, so I read new imu data only at end of iteration
 		// Process IMU
 		SolutionIMU(OBSimu, MechECEF);	//this is the gnss+first imu data		                                                                      	//Get position from current MechECEF state and IMU data just read - This has effects on: MechECEF e IMUsol
 		//Here we have gnss+acc+gyr
 
-		(*int_sol).a = IMUsol.posXYZ.at(0);
+		 (*int_sol).a = IMUsol.posXYZ.at(0);
 		(*int_sol).b = IMUsol.posXYZ.at(1);
 		(*int_sol).c = IMUsol.posXYZ.at(2);
 
 		(*int_sol).va = IMUsol.velXYZ.at(0);
 		(*int_sol).vb = IMUsol.velXYZ.at(1);
-		(*int_sol).vc = IMUsol.velXYZ.at(2);
+		(*int_sol).vc = IMUsol.velXYZ.at(2); 
 
-		calculateSTD(int_sol);
+		//calculateSTD(int_sol);
 		//printf("%f, %f, %f\n", (*int_sol).sda, (*int_sol).sdb, (*int_sol).sdc);
 		//Update Time
 		_epochIMU = OBSimu._IMUdata.imuTime;
 
+		read_imu();
+
 		n++;
-	} while (_epochIMU <= (*int_sol).time.sec);
-	cout << n << endl;
-	cout.flush();
-
-	GNSS_pos << (*int_sol).a , (*int_sol).b, (*int_sol).c;
-	GNSS_vel << 0, 0, 0;
-	gnss_posP << (*int_sol).sda, (*int_sol).sdb, (*int_sol).sdc, (*int_sol).sdab, (*int_sol).sdbc, (*int_sol).sdca;
-	gnss_velP << 0, 0, 0, 0, 0, 0;
-	rr = GNSS_pos.transpose(); 
-	pos_GNSS=xyz2blh(rr); 
-
-	Pp << gnss_posP(0), gnss_posP(3), gnss_posP(5), 
-	gnss_posP(3), gnss_posP(1), gnss_posP(4),
-	gnss_posP(5), gnss_posP(4), gnss_posP(2);
-
-	//print(Pp);
-
-	if(Pp.diagonal().maxCoeff()>VAR_POS)
-		rr=Vector3d::Zero();
-	else{
-		Pp=T.inverse()*Pp*T.transpose().inverse();
-		VAR1 << Pp(0,0), Pp(1,1), Pp(2,2);
+	} while (/* n <= 104 */ _epochIMU <= (*int_sol).time.sec);
+	if(logs){
+		out << "---------------------------------------------------" << endl;
+		out.flush();
 	}
+	//cout << n << endl;
+	//cout.flush();
 
-	//print(VAR1);
-
-	/*Matrix<double, 1, 6> velP=gnss_velP; 
-	Pp << velP(0), velP(3), velP(5),
-		velP(3), velP(1), velP(4),
-		velP(5), velP(4), velP(2);
-	
-
-	if(Pp.diagonal().maxCoeff()>VAR_VEL)
-		ve=Vector3d::Zero();
-	else{
-		Pp=Cne*Pp*Cne.transpose();
-		VAR2 << Pp(0,0), Pp(1,1), Pp(2,2);
-		if(VAR2.norm()==0)
-			VAR2 << VAR_VEL, VAR_VEL, VAR_VEL;
-	}*/
-
-	Vector3d pos_INS=pos+Mpv*Cnb*lever;
-
-	//print(pos_INS);
-	//Vector3d vel_INS=vel+Cnb*askew(web)*lever;
-
-	v=pos_INS-pos_GNSS; 
-	R=VAR1.asDiagonal();
-	H=MatrixXd::Zero(3,15);
-	H(0,6)=1;H(1,7)=1;H(2,8)=1;
-
-	//print(v);
-	//print(R);
-	//print(H);
-
-	VectorXd x_pre = x;
-	MatrixXd P_pre = P;
-	//print(x_pre);
-	//print(P_pre);
-
-	////////////////////// measurement update
-	int nx= 15 /*size(x_pre,1)*/; int stat=1;
-
-	Q=H*P_pre*H.transpose()+R;
-	if(Q.determinant()==0)
-		stat=0;
-
-	//print(Q);
-
-	MatrixXd K(15, 3); K =P_pre*H.transpose()*Q.inverse();
-	VectorXd xx(15); xx = K*v;
-	P=(MatrixXd::Identity(nx, nx)-K*H)*P_pre;
-
-	//print(K);
-
-	//print(xx);
-
-	//print(P);
-
-	//if(~isreal(xx)||~isreal(P))
-	//	stat=0;
-
-	Vector3d h; h << xx(0), xx(1), xx(2);
-	Cnb = (Matrix3d::Identity()+askew(h))*Cnb;
-
-	//print(Cnb);
-	//if ~isreal(Cnb)
-	//	stat=0;
-
-	//Cnb = Cnb;
-	att = Cnb2att(Cnb);
-
-	//print(att);
-	Vector3d xx_i;
-	//xx_i << xx(3), xx(4), xx(5);
-	//vel = vel-xx_i;
-	xx_i << xx(6), xx(7), xx(8);
-	pos = pos-xx_i;
-	xx_i << xx(9), xx(10), xx(11);
-	bg  = bg+xx_i;
-	xx_i << xx(12), xx(13), xx(14);
-	ba  = ba+xx_i;
-	x  << att, vel, pos, bg, ba;
-
-	//print(pos);
-	//print(bg);
-	//print(ba);
-	//print(x);
-	//P = P;
-
-	Vector3d helper; helper << x(6), x(7), x(8);
-	rr=blh2xyz(helper); Dblh2Dxyz(helper);
-	pos=rr.transpose();
-
-	//print(rr);
-
-	//print(pos);
-
-	helper << x(3), x(4), x(5);
-	//vel=(Cen*helper).transpose();
-	helper << x(0), x(1), x(2);
-	att=helper.transpose()/0.0175;
-
-	//print(att);
-
-	if(att(2)>=0)
-		att(2)=360-att(2);
-	else
-		att(2)=-att(2);
-
-	initPosvar << P(6, 6), P(7, 7), P(8, 8);
-	posvar = initPosvar.array().matrix().asDiagonal(); //blh variance
-	posvar1 << P(6,6), P(6,7), P(6,8), P(7,6), P(7,7), P(7, 8), P(8, 6), P(8, 7), P(8, 8);
-	posvar=T*posvar1*T.transpose();        //blh_var to xyz_var
-
-	//print(posvar1);
-
-	//velvar=P(4:6,4:6); velvar=Cen*velvar*Cen';    %enu_var to xyz_var
-
-
-	va << posvar(0, 0), posvar(1, 1), posvar(2, 2), posvar(0,1), posvar(1,2), posvar(0,2);
-
-	//print(va);
-
-	for(int i = 0; i < 6; i++){
-		if(va(i) < 0)
-			va(i) = -sqrt(-va(i));
-		else
-			va(i) = sqrt(va(i));
-	}
-
-	//Debug print
-	//printf("AA: %lf %lf %lf\n", va(0), va(1), va(2));
-
-	(*int_sol).sda = va(0);
-	(*int_sol).sdb = va(1);
-	(*int_sol).sdc = va(2);
-	(*int_sol).sdab = va(3);
-	(*int_sol).sdbc = va(4);
-	(*int_sol).sdca = va(5);
+	//
 
 	//here we have next gnss+imu position
 
@@ -1149,20 +922,17 @@ void Loosely::init_imu(gnss_sol_t fst_pos){
 	else{
 		ss << root_path << "test/imu.csv";
 		ss1 << log_dir << "/imu_raw" << ".log";
-		//cout << ss1.str() << endl;
-		//cout.flush();
 	}
 	FIO.fileSafeIn(ss.str(), fimu);
 
 	if(logs){
-		cout << ss1.str() << endl;
 		out.open(ss1.str());
 	}
 
 	OBSgnss.readEpoch(fst_pos);
 	read_imu(); //fill OBSimu
 
-	_epochIMU = OBSimu._IMUdata.imuTime; //TODO: read imu time
+	_epochIMU = OBSimu._IMUdata.imuTime;
 	_epochGNSS = fst_pos.time.sec;
 
 	// Initial ECEF position for vehicle from GNSS     It puts the first position of the gnss file (first line) in _ECEF_o (and in _ECEF_imu e in GNSSsol.posXYZ)
