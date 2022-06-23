@@ -48,7 +48,14 @@ extern double tot_acc_z;
 
 extern int nsamples;
 
+
+extern int imu_thread_id;
 extern char log_dir[PATH_MAX/2];
+
+#define IMUBUF_CAPACITY 208
+
+extern char imu[IMUBUF_CAPACITY][IMU_LENGTH];
+extern int imu_count;
 
 
 extern pid_t str2str_pid, rtkrcv1_pid, rtkrcv2_pid;

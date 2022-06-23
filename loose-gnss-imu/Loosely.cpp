@@ -177,6 +177,8 @@ const int VAR_POS=10^2; /*const double VAR_VEL=0.0225*/; const int MAX_DPOS=10; 
 Vector3d rr; 
 Vector3d pos_GNSS; 
 
+int last_imu_epoch = 0;
+
 Loosely::Loosely(){
 
 
@@ -205,17 +207,19 @@ void read_imu(){
 		if (line.find("GPS") != std::string::npos) {
 			getline(fimu, line);
 		}
+		OBSimu.clearObs();
+		OBSimu.obsEpoch(line);
 	}
 	else{
 		char buf[IMU_LENGTH];
+		do{
+		strcpy(buf, imu[imu_count++]);
+		imu_count = imu_count % IMUBUF_CAPACITY;
 
-		get_imu_data(buf);
-
-		//while(get_imu_data(buf) != 0){
-		//	out << "0" << endl;
-		//	out.flush();
-		//} //while no imu data or errors reading imu data
 		line = string(buf);
+		OBSimu.clearObs();
+		OBSimu.obsEpoch(line);
+		}while(OBSimu._IMUdata.imuTime)
 	}
 
 	if(logs){
@@ -225,8 +229,7 @@ void read_imu(){
 
 	//cout << line << endl;
 	//cout.flush();
-	OBSimu.clearObs();
-	OBSimu.obsEpoch(line);
+	
 }
 
 void closeF(){
@@ -903,6 +906,16 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 	(*int_sol).time.week = OBSimu._IMUdata.week;
 }
 
+void loop_imu_thread(){
+	char buf[IMU_LENGTH];
+	while(1){
+		get_imu_data(buf);
+
+		//modificare matrce "imu"
+		
+	}
+}
+
 void Loosely::init_imu(gnss_sol_t fst_pos){
 	FileIO FIO;
 
@@ -948,6 +961,9 @@ void Loosely::init_imu(gnss_sol_t fst_pos){
 	_LLH_o = eigVector2std(ecef2geo(h));	
 
 	IMU_INI_TIME_END = _epochIMU+imu_init_epochs; // Time taken to initialize the imu  (first imu epoch + 300) (for example)
+
+	int err = pthread_create(&imu_thread_id, NULL, loop_imu_thread(), NULL);
+
 }
 
 // Facilitates the GNSS-IMU Loose integration process
