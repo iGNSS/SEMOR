@@ -183,6 +183,7 @@ void close_semor(int status){
     if(rtkrcv2_pid != -1 && kill(rtkrcv2_pid, SIGKILL) == -1){
         perror("SEMOR: Error killing rtkrcv(2) process");
     }
+    pthread_mutex_destroy(&lock);
     close_ctocpp();
     if(logs){
         fclose(sol_file[GPS]);
@@ -390,7 +391,6 @@ int get_best_sol_3(){ //if 3 solutions available - 0: no best found, 1: best fou
 }
 
 void process_solutions(int chk_sols){
-    printf("process_solutions()\n");
     int i;
     int is_best_found = 1;
     char g[200];
@@ -461,7 +461,6 @@ void process_solutions(int chk_sols){
     
 
     if(logs && (imu_ready >= 1)){
-        printf("log\n");
         print_solution(GPS);
         print_solution(GALILEO);
         print_solution(IMU);
@@ -651,8 +650,8 @@ void handle_connection(){
                 //memset(buf[i], 0, sizeof buf);
                 //strncpy(dest_string,"",strlen(dest_string));
 
-            //usleep(150000); //gives time to the solutions to be read (if one of them is late)
-            ret = poll(fds1[i], 1, 150000); //wait for events on the 3 fds
+            usleep(150000); //gives time to the solutions to be read (if one of them is late)
+            //ret = poll(fds1[i], 1, 150000); //wait for events on the 3 fds
             /* if(i == 0)
                 usleep(9000); */
             //ret = poll(fds, 3, timeout_msecs);
@@ -689,7 +688,7 @@ void handle_connection(){
             }
         }
 
-        if(first_time && first_input < 1){ //ci deve essere almeno la soluzione RTK all'inizio
+        if(first_input < 1){ //ci deve essere almeno la soluzione RTK all'inizio
             continue;
         }
 
@@ -703,14 +702,13 @@ void handle_connection(){
             printf("SEMOR: connection established with rtkrcv\nwait %d seconds for the IMU to initialize...\n", imu_init_epochs);
             //Initialize imu epoch
 
-            sol[IMU].time.week = sol[GPS].time.week;
-            sol[IMU].time.sec = sol[GPS].time.sec;
+            sol[IMU].time.week = sol[GPS].time.week != 0 ? sol[GPS].time.week : sol[GALILEO].time.week;
+            sol[IMU].time.sec = sol[GPS].time.sec != 0 ? sol[GPS].time.sec : sol[GALILEO].time.sec;
 
             if(debug){
                 sol[IMU].time.sec = seconds;
             }
             init_imu(sol[IMU]);
-            printf("finito init_imu()\n");
             //initial_pos.time.sec++;
             first_time = 0;
         }

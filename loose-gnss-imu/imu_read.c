@@ -395,7 +395,6 @@ int setup(){
 	#endif
 
 int get_imu_data(char line[IMU_LENGTH]){
-	printf("imu_read()\n");
 	int n;
 	if(need_setup){
 		setup();
@@ -453,30 +452,21 @@ int get_imu_data(char line[IMU_LENGTH]){
 		if (flags == 7)
 		{
 			flags = 0;
-			if(first_read){
-				struct timeval tv;
-				gettimeofday(&tv, NULL);
-				week = ((tv.tv_sec+LEAP_SECONDS-GPS_EPOCH))/(7*24*3600);
-				sec = (double)(((tv.tv_sec+LEAP_SECONDS-GPS_EPOCH))%(7*24*3600))+(tv.tv_usec / 1000000.0);
-				//first_read = 0;
-			}
-			else{
-				sec += (stamp-last_stamp) * 0.000025;
-			}
 
-			struct timeval tvv;
-            gettimeofday(&tvv, NULL);
-            int week1 = ((tvv.tv_sec+LEAP_SECONDS-GPS_EPOCH))/(7*24*3600);
-            double sec1 = (double)(((tvv.tv_sec+LEAP_SECONDS-GPS_EPOCH))%(7*24*3600))+(tvv.tv_usec / 1000000.0);
+			struct timeval tv;
+			gettimeofday(&tv, NULL);
+			week = ((tv.tv_sec+LEAP_SECONDS-GPS_EPOCH))/(7*24*3600);
+			sec = (double)(((tv.tv_sec+LEAP_SECONDS-GPS_EPOCH))%(7*24*3600))+(tv.tv_usec / 1000000.0);
+
 			/*nsamples += 1;
 			tot_acc_x += ax*acclUnits*gravity;
 			tot_acc_y += ay*acclUnits*gravity;
 			tot_acc_z += az*acclUnits*gravity;*/
-			sprintf(line, "%d %lf %7.4f %7.4f %7.4f %8.3f %8.3f %8.3f | %10u %d | (preso: %lf)", week,
+			sprintf(line, "%d %lf %7.4f %7.4f %7.4f %8.3f %8.3f %8.3f | %10u %d", week,
 				sec,
 				/*ax,ay,az, gx,gy,gz,*/
 				ax*acclUnits*gravity/*-avg_acc_x*/, ay*acclUnits*gravity/*-avg_acc_y*/, az*acclUnits*gravity/*-avg_acc_z*/,
-				gx*gyroUnits, gy*gyroUnits, gz*gyroUnits, stamp, n, sec1);
+				gx*gyroUnits, gy*gyroUnits, gz*gyroUnits, stamp, n);
 			
 			last_stamp = stamp;
 
@@ -487,213 +477,4 @@ int get_imu_data(char line[IMU_LENGTH]){
 		}
 	}
 	return 1;
-}
-
-int prova()
-{
-//	open /dev/i2c-1 and set slave address
-	if (i2c_open() < 0)
-		return 1;
-	if (i2c_addr(0x6B) < 0)
-		return 2;
-
-//	setup registers
-	int setup_guard = 0;
-	for (;;)
-	{
-		if (++setup_guard > 3)
-		{
-			fputs("Setup failed\n", stderr);
-			return 3;
-		}
-
-		// test
-		i2c_buf[0] = WHO_AM_I_REG;
-		if (i2c_write(1) != 1)
-			continue;
-		if (i2c_read(1) != 1)
-			continue;
-		if (i2c_buf[0] != 0x6C)
-			fprintf(stderr, "WHO AM I: %02X!\n", i2c_buf[0]);
-
-		// reset
-		i2c_buf[0] = CTRL3_C;
-		i2c_buf[1] = IF_INC_ENABLED | BOOT_REBOOT_MODE | SW_RESET_DEVICE;
-		if (i2c_write(2) != 2)
-			continue;
-
-		// setup or disable FIFO
-		i2c_buf[0] = FIFO_CTRL1;
-	#if USE_FIFO
-		i2c_buf[1] = 0;
-		i2c_buf[2] = 0;
-		i2c_buf[3] = FIFO_BDR_ACC_208Hz | FIFO_BDR_GYRO_208Hz;
-	#if ADD_STAMP
-		i2c_buf[4] = FIFO_MODE_CONTINUOUS | FIFO_TS_DEC_BY_1;
-	#else
-		i2c_buf[4] = FIFO_MODE_CONTINUOUS;
-	#endif
-	#else
-		i2c_buf[1] = 0;
-		i2c_buf[2] = 0;
-		i2c_buf[3] = 0;
-		i2c_buf[4] = FIFO_MODE_DISABLED;
-	#endif
-		if (i2c_write(5) != 5)
-			continue;
-
-		// start 8g, 500dps, 104Hz
-		i2c_buf[0] = CTRL1_XL;
-		i2c_buf[1] = FS_XL_8g|ODR_XL_104Hz;
-		i2c_buf[2] = FS_G_500dps|ODR_GYRO_104Hz;
-	#if USE_FIFO
-		i2c_buf[3] = IF_INC_ENABLED;
-	#else
-		i2c_buf[3] = IF_INC_ENABLED | BDU_BLOCK_UPDATE;
-	#endif
-		if (i2c_write(4) != 4)
-			continue;
-
-		i2c_buf[0] = CTRL10_C;
-	#if ADD_STAMP
-		i2c_buf[1] = TIMESTAMP_ENABLED;
-	#else
-		i2c_buf[1] = 0;
-	#endif
-		if (i2c_write(2) != 2)
-			continue;
-
-		break;
-	}
-//	unit conversion constants
-	double acclUnits = 1.0/4096;// bit weight for 8g range (8.0/(1<<(16-1)))
-	double gyroUnits = 0.0175;	// bit weight for 500dps range
-
-//	read and print data
-	#if USE_FIFO
-	int16_t ax,ay,az;
-	int16_t gx,gy,gz;
-	#if ADD_STAMP
-	uint32_t stamp;
-	#endif
-	uint8_t flags;
-	#endif
-	for (;; usleep(5000))
-	{
-	#if USE_FIFO
-
-		i2c_buf[0] = FIFO_STATUS1;
-		if (i2c_write(1) != 1)
-			continue;
-		if (i2c_read(2) != 2)
-			continue;
-	//	number of unread data
-		int n = i2c_buf[0] | (i2c_buf[1] & 3) << 8;
-		while (n--)
-		{
-			i2c_buf[0] = FIFO_DATA_OUT_TAG;
-			if (i2c_write(1) != 1)
-				break;
-			if (i2c_read(7) != 7)
-				break;
-			//printf("%02X:%02X%02X:%02X%02X:%02X%02X\n", i2c_buf[0], i2c_buf[1], i2c_buf[2], i2c_buf[3], i2c_buf[4], i2c_buf[5], i2c_buf[6]);
-			switch (i2c_buf[0] >> 3)
-			{
-			case ACCELEROMETER_DATA:
-			case ACCELERTOMETER_DATA_T_1:
-			case ACCELERTOMETER_DATA_T_2:
-			case ACCELERTOMETER_DATA_2xC:
-			case ACCELERTOMETER_DATA_3xC:
-				ax = i2c_buf[1] | i2c_buf[2] << 8;
-				ay = i2c_buf[3] | i2c_buf[4] << 8;
-				az = i2c_buf[5] | i2c_buf[6] << 8;
-				flags |= 1;
-				break;
-			case GYROSCOPE_DATA:
-			case GYRO_DATA_T_1:
-			case GYRO_DATA_T_2:
-			case GYRO_DATA_2xC:
-			case GYRO_DATA_3xC:
-				gx = i2c_buf[1] | i2c_buf[2] << 8;
-				gy = i2c_buf[3] | i2c_buf[4] << 8;
-				gz = i2c_buf[5] | i2c_buf[6] << 8;
-				flags |= 2;
-				break;
-		#if ADD_STAMP
-			case TIMESTAMP_DATA:
-				stamp = i2c_buf[1] | i2c_buf[2] << 8 | i2c_buf[3] << 16 | i2c_buf[4] << 24;
-				flags |= 4;
-				break;
-		#endif
-			default:
-				printf("TAG %02X\n", i2c_buf[0]);
-				break;
-			}
-		#if ADD_STAMP
-			if (flags == 7)
-			{
-				flags = 0;
-				printf("%10u: %7.4f %7.4f %7.4f %8.3f %8.3f %8.3f\n",
-					stamp,
-					/*ax,ay,az, gx,gy,gz,*/
-					ax*acclUnits, ay*acclUnits, az*acclUnits,
-					gx*gyroUnits, gy*gyroUnits, gz*gyroUnits);
-
-				//printf("%10u: %6d %6d %6d | %6d %6d %6d || %7.4f %7.4f %7.4f | %8.3f %8.3f %8.3f\n",
-
-			}
-		#else
-			if (flags == 3)
-			{
-				flags = 0;
-				printf("%6d %6d %6d | %6d %6d %6d || %7.4f %7.4f %7.4f | %8.3f %8.3f %8.3f\n",
-					ax,ay,az, gx,gy,gz,
-					ax*acclUnits, ay*acclUnits, az*acclUnits,
-					gx*gyroUnits, gy*gyroUnits, gz*gyroUnits);
-			}
-		#endif
-		}
-
-	#else
-
-		i2c_buf[0] = STATUS_REG;
-		if (i2c_write(1) != 1)
-			continue;
-		if (i2c_read(1) != 1)
-			continue;
-		uint8_t status = i2c_buf[0];
-		if ((status & 3) != 3)
-			continue;
-		i2c_buf[0] = OUTX_L_G;
-		if (i2c_write(1) != 1)
-			continue;
-		if (i2c_read(12) != 12)
-			break;
-		int16_t gx = i2c_buf[0] | i2c_buf[1] << 8;
-		int16_t gy = i2c_buf[2] | i2c_buf[3] << 8;
-		int16_t gz = i2c_buf[4] | i2c_buf[5] << 8;
-		int16_t ax = i2c_buf[6] | i2c_buf[7] << 8;
-		int16_t ay = i2c_buf[8] | i2c_buf[9] << 8;
-		int16_t az = i2c_buf[10]| i2c_buf[11]<< 8;
-	#if ADD_STAMP
-		i2c_buf[0] = TIMESTAMP0_REG;
-		if (i2c_write(1) != 1)
-			continue;
-		if (i2c_read(4) != 4)
-			continue;
-		uint32_t stamp = i2c_buf[0] | i2c_buf[1] << 8 | i2c_buf[2] << 16 | i2c_buf[3] << 24;
-		printf("%10u: %6d %6d %6d | %6d %6d %6d || %7.4f %7.4f %7.4f | %8.3f %8.3f %8.3f\n",
-			stamp,
-			ax,ay,az, gx,gy,gz,
-			ax*acclUnits, ay*acclUnits, az*acclUnits,
-			gx*gyroUnits, gy*gyroUnits, gz*gyroUnits);
-	#else
-		printf("%6d %6d %6d | %6d %6d %6d || %7.4f %7.4f %7.4f | %8.3f %8.3f %8.3f\n",
-			ax,ay,az, gx,gy,gz,
-			ax*acclUnits, ay*acclUnits, az*acclUnits,
-			gx*gyroUnits, gy*gyroUnits, gz*gyroUnits);
-	#endif
-
-	#endif
-	}
 }

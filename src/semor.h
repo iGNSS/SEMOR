@@ -49,13 +49,15 @@ extern double tot_acc_z;
 extern int nsamples;
 
 
-extern int imu_thread_id;
+extern pthread_t imu_thread_id;
 extern char log_dir[PATH_MAX/2];
 
-#define IMUBUF_CAPACITY 208
+#define IMUBUF_CAPACITY 312 //3*imu frequency
 
 extern char imu[IMUBUF_CAPACITY][IMU_LENGTH];
-extern int imu_count;
+extern int imu_count_write; //to store samples in imu matrix
+extern int imu_count_read; //to read samples from imu matrix
+extern pthread_mutex_t lock;
 
 
 extern pid_t str2str_pid, rtkrcv1_pid, rtkrcv2_pid;

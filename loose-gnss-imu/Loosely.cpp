@@ -179,6 +179,11 @@ Vector3d pos_GNSS;
 
 int last_imu_epoch = 0;
 
+pthread_mutex_t lock;
+char imu[IMUBUF_CAPACITY][IMU_LENGTH];
+int imu_count_write = 0;
+int imu_count_read = 0;
+
 Loosely::Loosely(){
 
 
@@ -213,22 +218,22 @@ void read_imu(){
 	else{
 		char buf[IMU_LENGTH];
 		do{
-		strcpy(buf, imu[imu_count++]);
-		imu_count = imu_count % IMUBUF_CAPACITY;
+			strcpy(buf, imu[imu_count_read]); //forse qui non serve il lock
+			line = string(buf);
+			OBSimu.clearObs();
+			OBSimu.obsEpoch(line);
+		}while(OBSimu._IMUdata.imuTime < _epochIMU);
 
-		line = string(buf);
-		OBSimu.clearObs();
-		OBSimu.obsEpoch(line);
-		}while(OBSimu._IMUdata.imuTime)
+		pthread_mutex_lock(&lock);
+		imu_count_read++;
+		imu_count_read = imu_count_read % IMUBUF_CAPACITY;
+		pthread_mutex_unlock(&lock);
 	}
 
 	if(logs){
 		out << line << endl;
 		out.flush();
 	}
-
-	//cout << line << endl;
-	//cout.flush();
 	
 }
 
@@ -811,8 +816,32 @@ void deb(char message[300]){
     }
 }
 
+void* loop_imu_thread(void* arg){
+	char buf[IMU_LENGTH];
+	string line;
+
+	//Initialize lock
+	if (pthread_mutex_init(&lock, NULL) != 0)
+    {
+        printf("\n mutex init failed\n");
+		perror("SEMOR: pthread_mutex_init()");
+        close_semor(1);
+		return;
+    }
+
+	while(1){
+		get_imu_data(buf);
+
+		//modificare matrice "imu"
+
+		pthread_mutex_lock(&lock);
+		strcpy(imu[imu_count_write++], buf);
+		imu_count_write = imu_count_write % IMUBUF_CAPACITY;
+		pthread_mutex_unlock(&lock);
+	}
+}
+
 void Loosely::get_imu_sol(gnss_sol_t* int_sol){
-	printf("get_imu_sol()\n");
 	 /* struct timeval tv;
             gettimeofday(&tv, NULL);
             int week = ((tv.tv_sec+LEAP_SECONDS-GPS_EPOCH))/(7*24*3600);
@@ -871,14 +900,6 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 		SolutionIMU(OBSimu, MechECEF);	//this is the gnss+first imu data		                                                                      	//Get position from current MechECEF state and IMU data just read - This has effects on: MechECEF e IMUsol
 		//Here we have gnss+acc+gyr
 
-		 (*int_sol).a = IMUsol.posXYZ.at(0);
-		(*int_sol).b = IMUsol.posXYZ.at(1);
-		(*int_sol).c = IMUsol.posXYZ.at(2);
-
-		(*int_sol).va = IMUsol.velXYZ.at(0);
-		(*int_sol).vb = IMUsol.velXYZ.at(1);
-		(*int_sol).vc = IMUsol.velXYZ.at(2); 
-
 		//calculateSTD(int_sol);
 		//printf("%f, %f, %f\n", (*int_sol).sda, (*int_sol).sdb, (*int_sol).sdc);
 		//Update Time
@@ -892,6 +913,15 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 		out << "---------------------------------------------------" << endl;
 		out.flush();
 	}
+
+	(*int_sol).a = IMUsol.posXYZ.at(0);
+	(*int_sol).b = IMUsol.posXYZ.at(1);
+	(*int_sol).c = IMUsol.posXYZ.at(2);
+
+	(*int_sol).va = IMUsol.velXYZ.at(0);
+	(*int_sol).vb = IMUsol.velXYZ.at(1);
+	(*int_sol).vc = IMUsol.velXYZ.at(2); 
+
 	//cout << n << endl;
 	//cout.flush();
 
@@ -904,16 +934,6 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 
 	//Mark imu solution as usable for the comparison (in order to get the best solution for SEMOR)
 	(*int_sol).time.week = OBSimu._IMUdata.week;
-}
-
-void loop_imu_thread(){
-	char buf[IMU_LENGTH];
-	while(1){
-		get_imu_data(buf);
-
-		//modificare matrce "imu"
-		
-	}
 }
 
 void Loosely::init_imu(gnss_sol_t fst_pos){
@@ -962,7 +982,7 @@ void Loosely::init_imu(gnss_sol_t fst_pos){
 
 	IMU_INI_TIME_END = _epochIMU+imu_init_epochs; // Time taken to initialize the imu  (first imu epoch + 300) (for example)
 
-	int err = pthread_create(&imu_thread_id, NULL, loop_imu_thread(), NULL);
+	int err = pthread_create(&imu_thread_id, NULL, &loop_imu_thread, NULL);
 
 }
 

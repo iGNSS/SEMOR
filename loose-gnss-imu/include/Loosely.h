@@ -77,6 +77,7 @@ public:
 	double _Heading_imu;
 
 	// Functions
+	void read_imu();
 	void epochOutput(std::ofstream& fout);
 	void epochOutputIMU(std::ofstream& fout);
 	void epochOutputGPS(std::ofstream& fout);
