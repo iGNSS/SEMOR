@@ -65,6 +65,7 @@ void IMUmechECEF::InitializeMechECEF(vector<double> iniPOS, vector<double> iniLL
 	_fbias = Fbias; _gbias = Gbias;
 	// Lever Arm
 	double LAx = -0.964, LAy = -0.924, LAz = -0.196;
+ 
 	_Lxyz = VectorXd::Zero(3);
 	_Lxyz(0) = LAx; _Lxyz(1) = LAy; _Lxyz(2) = LAz;
 }
@@ -114,10 +115,18 @@ MatrixXd IMUmechECEF::TensorGravGrad(double X, double Y, double Z) {
 // ECEF Mechanization of IMU
 void IMUmechECEF::MechanizerECEF(double dT, vector<double> acc, vector<double> gyr, vector<double> LLH) {
 	// Observation Arrangement
+ 
+ /* HUGO /
+ cout << acc.at(0) - _fbias.at(0) << endl << acc.at(1) - _fbias.at(1) << endl << acc.at(2) - _fbias.at(2) << endl << endl;
+ 
+ cout << gyr.at(0) - _gbias.at(0) << endl << gyr.at(1) - _gbias.at(1) << endl << gyr.at(2) - _bias.at(2) << endl << endl;
+ /* HUGO END */
+ 
 	vector<double> fib;
 	fib.push_back(acc.at(0) - _fbias.at(0)); fib.push_back(acc.at(1) - _fbias.at(1)); fib.push_back(acc.at(2) - _fbias.at(2));
 	vector<double> wib;
-	wib.push_back(gyr.at(0) - _gbias.at(0)); wib.push_back(gyr.at(1) - _gbias.at(1)); wib.push_back(gyr.at(2) - _gbias.at(2));
+ 
+  wib.push_back(gyr.at(0) - _gbias.at(0)); wib.push_back(gyr.at(1) - _gbias.at(1)); wib.push_back(gyr.at(2) - _gbias.at(2));
 
 	// --- Constants ---
 	VectorXd om_eie = VectorXd::Zero(3); om_eie(2) = Om;
@@ -171,13 +180,18 @@ void IMUmechECEF::MechanizerECEF(double dT, vector<double> acc, vector<double> g
 	// --- Update ---
 	// Attitude
 	_att.clear();
-	_att = eigVector2std(Att0);
+	_att = eigVector2std(Att0); 
 	// Position
 	_pos.clear();
 	_pos = eigVector2std(pos_eeb);
 	// Velocity
 	_vel.clear();
 	_vel = eigVector2std(vel_eeb);
+ 
+  /* HUGO /
+  cout << _vel.at(0) << endl<< _vel.at(1) << endl<< _vel.at(2) << endl << endl;
+   /* HUGO END */
+   
 	// Body to Earth DCM
 	_Cbe = Cbe;
 	// Specific Force in earth frame

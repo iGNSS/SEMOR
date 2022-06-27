@@ -55,6 +55,8 @@ int InitializeIMU::stepInitializeIMU(ReaderIMU OBSimu, double EndTime, vector<do
 		Gz_avg = Gz_avg + OBSimu._IMUdata.Gz;
 		return 0;
 	}
+  
+ 
 	// Compute rough estimate of Yaw
 	double numer = -Gx_avg / c; double denom = Gy_avg / c;
 	double yaw = atan(numer / denom);
@@ -96,6 +98,7 @@ int InitializeIMU::stepInitializeIMU(ReaderIMU OBSimu, double EndTime, vector<do
 
 	// *** As per Paul Groves' Textbook
 	// Compute Roll and Pitch
+ 
 	_roll = atan2(-Ay_avg, Az_avg);
 	_pitch = atan(-Ax_avg / (sqrt(pow(Ay_avg, 2) + pow(Az_avg, 2))));
 	// Compute Yaw
@@ -104,6 +107,7 @@ int InitializeIMU::stepInitializeIMU(ReaderIMU OBSimu, double EndTime, vector<do
 	_yaw = atan2(num, den);
 	// Add roll pitch yaw to vector
 	_RPY.push_back(_roll); _RPY.push_back(_pitch); _RPY.push_back(_yaw);
+
 	return 1;
 }
 

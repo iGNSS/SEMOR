@@ -390,7 +390,6 @@ int get_best_sol_3(){ //if 3 solutions available - 0: no best found, 1: best fou
 }
 
 void process_solutions(int chk_sols){
-    printf("process_solutions()\n");
     int i;
     int is_best_found = 1;
     char g[200];
@@ -461,7 +460,6 @@ void process_solutions(int chk_sols){
     
 
     if(logs && (imu_ready >= 1)){
-        printf("log\n");
         print_solution(GPS);
         print_solution(GALILEO);
         print_solution(IMU);
@@ -483,7 +481,7 @@ void process_solutions(int chk_sols){
     //Output
     if(!is_best_found){
         gnsscopy(&best, sol[IMU]);
-        printf("no best found\n");
+        //printf("no best found\n");
     }
 
     //Here we have the solution
@@ -504,6 +502,7 @@ void process_solutions(int chk_sols){
     //Flag solutions as already used
     sol[GPS].time.week = 0;
     sol[GALILEO].time.week = 0;
+
 
     //Post comparison and output
     //So let's generate the next imu position
@@ -587,6 +586,14 @@ int read_gnss(int fd, int* offset, char* buf, int buf_length){
     return nbytes;
 }
 
+void print_time(){
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	int week = ((tv.tv_sec+LEAP_SECONDS-GPS_EPOCH))/(7*24*3600);
+	double sec = (double)(((tv.tv_sec+LEAP_SECONDS-GPS_EPOCH))%(7*24*3600))+(tv.tv_usec / 1000000.0);
+	printf("%lf\n", sec);
+}
+
 void handle_connection(){
     struct addrinfo hints, *res;
     int status;
@@ -651,8 +658,8 @@ void handle_connection(){
                 //memset(buf[i], 0, sizeof buf);
                 //strncpy(dest_string,"",strlen(dest_string));
 
-            //usleep(150000); //gives time to the solutions to be read (if one of them is late)
-            ret = poll(fds1[i], 1, 150000); //wait for events on the 3 fds
+            usleep(150000); //gives time to the solutions to be read (if one of them is late)
+            //ret = poll(fds1[i], 1, 150000); //wait for events on the 3 fds
             /* if(i == 0)
                 usleep(9000); */
             //ret = poll(fds, 3, timeout_msecs);
@@ -662,7 +669,6 @@ void handle_connection(){
                     continue;
                 }
                 nbytes = read_gnss(socketfd[i], &offset[i], buf[i], sizeof buf[i]);
-
                 if(strstr(buf[i], "lat") || strstr(buf[i], "latitude") || strstr(buf[i], "ecef") || strlen(buf[i]) < 5){ //Check if the input string contains gnss data or if it is an empty line or header
                     offset[i] = 0;
                     //strcpy(buf[i], "");
@@ -689,7 +695,8 @@ void handle_connection(){
             }
         }
 
-        if(first_time && first_input < 1){ //ci deve essere almeno la soluzione RTK all'inizio
+
+        if(first_input < 1){ //ci deve essere almeno la soluzione RTK all'inizio
             continue;
         }
 
@@ -704,13 +711,12 @@ void handle_connection(){
             //Initialize imu epoch
 
             sol[IMU].time.week = sol[GPS].time.week;
-            sol[IMU].time.sec = sol[GPS].time.sec;
+            sol[IMU].time.sec = (sol[GPS].time.sec != 0) ? sol[GPS].time.sec : sol[GALILEO].time.sec;
 
             if(debug){
                 sol[IMU].time.sec = seconds;
             }
             init_imu(sol[IMU]);
-            printf("finito init_imu()\n");
             //initial_pos.time.sec++;
             first_time = 0;
         }

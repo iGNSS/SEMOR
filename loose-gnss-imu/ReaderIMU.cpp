@@ -36,9 +36,9 @@ void ReaderIMU::obsEpoch(string& line) {
 		// Extract observation time
 		epochTime = stod(words[1]);
 		// Organizing Acceleration Observations
-		acc.push_back(stod(words[5])); acc.push_back(stod(words[6])); acc.push_back(stod(words[7]));
+		acc.push_back(stod(words[2])); acc.push_back(stod(words[3])); acc.push_back(stod(words[4]));
 		// Organizing Gyroscope Observations
-		gyr.push_back(stod(words[2])); gyr.push_back(stod(words[3])); gyr.push_back(stod(words[4]));
+		gyr.push_back(stod(words[5])); gyr.push_back(stod(words[6])); gyr.push_back(stod(words[7]));
 
 		// Organize IMU Data structure
 		_IMUdata.imuTime = epochTime;

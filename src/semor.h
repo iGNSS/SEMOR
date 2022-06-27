@@ -50,6 +50,8 @@ extern int nsamples;
 
 extern char log_dir[PATH_MAX/2];
 
+extern double imu_sec;
+
 
 extern pid_t str2str_pid, rtkrcv1_pid, rtkrcv2_pid;
 
