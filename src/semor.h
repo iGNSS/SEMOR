@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <limits.h>
+#include <pthread.h>
 
 /*
 #ifdef __cplusplus
@@ -54,7 +55,7 @@ extern char log_dir[PATH_MAX/2];
 
 #define IMUBUF_CAPACITY 312 //3*imu frequency
 
-extern char imu[IMUBUF_CAPACITY][IMU_LENGTH];
+extern char imu_data[IMUBUF_CAPACITY][IMU_LENGTH];
 extern int imu_count_write; //to store samples in imu matrix
 extern int imu_count_read; //to read samples from imu matrix
 extern pthread_mutex_t lock;
@@ -115,8 +116,8 @@ extern gnss_sol_t best;
 
 
 //Functions
-extern void start_processing(void);
-extern void close_semor(int status);
+void start_processing(void);
+void close_semor(int status);
 #ifdef __cplusplus
 //extern Loosely *imu; //##CHANGED##
 extern "C"{
