@@ -290,16 +290,17 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 			avg_gx = avg_gy = avg_gz = 0;
 			nlocal = 0;
 		}                                                	
-		
+		//Update Time
+		_epochIMU = OBSimu._IMUdata.imuTime;
 		read_imu();
 
 		//Update Time
-		_epochIMU = OBSimu._IMUdata.imuTime;
+		//_epochIMU = OBSimu._IMUdata.imuTime;
 	} while (/* n <= 104 */ _epochIMU <= (*int_sol).time.sec);
-	 /* if(logs){
+	  if(logs){
 		out << "---------------------------------------------------" << endl;
 		out.flush();
-	}  */
+	}  
 	cout << n <<  endl;
 	cout.flush();
 
