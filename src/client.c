@@ -710,7 +710,7 @@ void handle_connection(){
             printf("SEMOR: connection established with rtkrcv\nwait %d seconds for the IMU to initialize...\n", imu_init_epochs);
             //Initialize imu epoch
 
-            sol[IMU].time.week = sol[GPS].time.week;
+            sol[IMU].time.week = (sol[GPS].time.week != 0) ? sol[GPS].time.week : sol[GALILEO].time.week;
             sol[IMU].time.sec = (sol[GPS].time.sec != 0) ? sol[GPS].time.sec : sol[GALILEO].time.sec;
 
             if(debug){
