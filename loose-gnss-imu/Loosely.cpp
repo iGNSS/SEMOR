@@ -197,23 +197,23 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 	//IMU is ready:
 
 	//Initialize IMU mechanization with initial position, initial velocity and biases
-	/*_ECEF_o = eigVector2std(double2eigVector((*int_sol).a, (*int_sol).b, (*int_sol).c));
+	/* _ECEF_o = eigVector2std(double2eigVector((*int_sol).a, (*int_sol).b, (*int_sol).c));
 	_LLH_o = eigVector2std(ecef2geo(double2eigVector((*int_sol).a, (*int_sol).b, (*int_sol).c)));	
 	_ECEF_imu = _ECEF_o;
 	GNSSsol.velXYZ = eigVector2std(double2eigVector((*int_sol).va, (*int_sol).vb, (*int_sol).vc)); */
 
-	MechECEF._pos.at(0) = (*int_sol).a;
+	/*MechECEF._pos.at(0) = (*int_sol).a;
 	MechECEF._pos.at(1) = (*int_sol).b;
 	MechECEF._pos.at(2) = (*int_sol).c;
 
 	MechECEF._vel.at(0) = (*int_sol).va;
 	MechECEF._vel.at(1) = (*int_sol).vb;
-	MechECEF._vel.at(2) = (*int_sol).vc;
+	MechECEF._vel.at(2) = (*int_sol).vc;*/
 
-	/*if(1){
+	/* if(1){
 		MechECEF.InitializeMechECEF(_ECEF_imu, _LLH_o, GNSSsol.velXYZ, iniIMU._RPY, iniIMU._ACCbias, iniIMU._GYRbias);
 		first = 0;
-	}*/
+	} */
 	//here we have previous gnss position
 
 
@@ -221,36 +221,86 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 	//print_time();
 	
 	
-	int n = 0;
+
+	double next_time = _epochIMU;
+	double epochAfterRead;
+	double group_time = 0.2;
+
+	double avg_ax = 0, avg_ay = 0, avg_az = 0;
+	double avg_gx = 0, avg_gy = 0, avg_gz = 0;
+	int n = 0, nlocal = 0;
 	do {
-		//Here I already have the first sample of this epoch, so I read new imu data only at end of iteration
-		// Process IMU
-		SolutionIMU(OBSimu, MechECEF);	//this is the gnss+first imu data		                                                                      	//Get position from current MechECEF state and IMU data just read - This has effects on: MechECEF e IMUsol
-		//Here we have gnss+acc+gyr
 
-		//calculateSTD(int_sol);
-		//printf("%f, %f, %f\n", (*int_sol).sda, (*int_sol).sdb, (*int_sol).sdc);
-		//Update Time
-		
-
-		read_imu();
+		/* SolutionIMU(OBSimu, MechECEF);	//this is the gnss+first imu data //Get position from current MechECEF state and IMU data just read - This has effects on: MechECEF e IMUsol
 		_epochIMU = OBSimu._IMUdata.imuTime;
+		read_imu();
+		epochAfterRead = OBSimu._IMUdata.imuTime;
+		//_epochIMU = OBSimu._IMUdata.imuTime;
+		n++; */
+
+		avg_ax +=OBSimu._IMUdata.Ax;
+		avg_ay +=OBSimu._IMUdata.Ay;
+		avg_az +=OBSimu._IMUdata.Az;
+
+		avg_gx +=OBSimu._IMUdata.Gx;
+		avg_gy +=OBSimu._IMUdata.Gy;
+		avg_gz +=OBSimu._IMUdata.Gz;
+
 		n++;
-	} while (/* n <= 104 */ _epochIMU <= (*int_sol).time.sec);
-		cout << n << endl;
+		nlocal++;
+		//printf("a\n");
+
+		if(_epochIMU >= next_time){
+
+			avg_ax /= nlocal;
+			avg_ay /= nlocal;
+			avg_az /= nlocal;
+
+			avg_gx /= nlocal;
+			avg_gy /= nlocal;
+			avg_gz /= nlocal;
+
+			OBSimu._IMUdata.Ax = avg_ax;
+			OBSimu._IMUdata.Ay = avg_ay;
+			OBSimu._IMUdata.Az = avg_az;
+
+			OBSimu._IMUdata.Gx = avg_gx;
+			OBSimu._IMUdata.Gy = avg_gy;
+			OBSimu._IMUdata.Gz = avg_gz;
+      
+			SolutionIMU(OBSimu, MechECEF); 
+
+			//Reset variables for next iterations
+			next_time += group_time;
+			avg_ax = avg_ay = avg_az = 0;
+			avg_gx = avg_gy = avg_gz = 0;
+			nlocal = 0;
+		}                                             	
+		//Update Time
+		_epochIMU = OBSimu._IMUdata.imuTime;
+		read_imu();
+		epochAfterRead = OBSimu._IMUdata.imuTime;
+
+
+	} while (epochAfterRead <= (*int_sol).time.sec);
+		 cout << n << endl;
 		cout.flush();
-	if(logs){
+	/*if(logs){
 		out << "---------------------------------------------------" << endl;
 		out.flush();
-	}
+	}*/ 
+
+	printf("next_time: %lf\n", next_time);
 
 	(*int_sol).a = IMUsol.posXYZ.at(0);
 	(*int_sol).b = IMUsol.posXYZ.at(1);
 	(*int_sol).c = IMUsol.posXYZ.at(2);
 
+	printf("%lf, %lf, %lf\n", (*int_sol).a, (*int_sol).b, (*int_sol).c);
+
 	(*int_sol).va = IMUsol.velXYZ.at(0);
 	(*int_sol).vb = IMUsol.velXYZ.at(1);
-	(*int_sol).vc = IMUsol.velXYZ.at(2); 
+	(*int_sol).vc = IMUsol.velXYZ.at(2);
 
 	//cout << n << endl;
 	//cout.flush();

@@ -367,13 +367,14 @@ int get_best_sol2(int sol1_idx, int sol2_idx){ //if 2 gnss solutions available -
     return 0;
 }
 
-int get_best_sol_3(){ //if 3 solutions available - 0: no best found, 1: best found (if no best found -> use IMU)
+int  get_best_sol_3(){ //if 3 solutions available - 0: no best found, 1: best found (if no best found -> use IMU)
+
+    if(similar_pos(sol[GPS], sol[IMU]) && similar_pos(sol[IMU], sol[GALILEO]) && similar_pos(sol[GPS], sol[GALILEO])){
+        gnss_avg_3(sol[GPS], sol[GALILEO], sol[IMU]);
+        return 1;
+    }
+
     if(similar_pos(sol[GPS], sol[GALILEO])){
-        if(similar_pos(sol[GPS], sol[IMU])){
-            gnss_avg_3(sol[GPS], sol[GALILEO], sol[IMU]);
-            return 1;
-        }
-        //Solo le due soluzioni GNSS sono simili
         gnss_avg_2(sol[GPS], sol[GALILEO]);
         return 1;
     }

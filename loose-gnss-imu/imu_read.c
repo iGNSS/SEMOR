@@ -303,7 +303,7 @@ double tot_acc_x = 0;
 double tot_acc_y = 0;
 double tot_acc_z = 0;
 
-double gravity = 9.806;
+double gravity = -9.80665;
 
 int setup(){
 	//	open /dev/i2c-1 and set slave address
