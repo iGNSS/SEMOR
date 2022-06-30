@@ -303,7 +303,7 @@ double tot_acc_x = 0;
 double tot_acc_y = 0;
 double tot_acc_z = 0;
 
-double gravity = -9.80665;
+double gravity = 9.80665;
 
 int setup(){
 	//	open /dev/i2c-1 and set slave address
@@ -554,8 +554,9 @@ int get_imu_data(char line[IMU_LENGTH]){
 			tot_acc_z += az*acclUnits*gravity;*/
 			sprintf(line, "%d %lf %7.4f %7.4f %7.4f %8.3f %8.3f %8.3f | %10u %d", week,
 				sec,
-				/*ax,ay,az, gx,gy,gz,*/
-				ax*acclUnits*gravity/*-avg_acc_x*/, ay*acclUnits*gravity/*-avg_acc_y*/, az*acclUnits*gravity/*-avg_acc_z*/,
+				/*ax*acclUnits*gravity, ay*acclUnits*gravity, az*acclUnits*gravity,
+				gx*gyroUnits, gy*gyroUnits, gz*gyroUnits, stamp, n);*/
+        -ax*acclUnits*gravity, -ay*acclUnits*gravity, -az*acclUnits*gravity,
 				gx*gyroUnits, gy*gyroUnits, gz*gyroUnits, stamp, n);
 			
 			last_stamp = stamp;

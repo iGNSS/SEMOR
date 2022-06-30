@@ -24,7 +24,9 @@ int first = 1;
 // PI
 const double PI = 3.1415926535898;
 
+double epochAfterRead;
 
+double lastGroupReadEpoch;
 
 
 IMUmechECEF MechECEF; 
@@ -107,8 +109,9 @@ void closeF(){
 // A routine to facilitate IMU mechanization in ECEF
 void Loosely::SolutionIMU(ReaderIMU IMU, IMUmechECEF& MechECEF) {
 	// Compute time interval
-	_dTimu = IMU._IMUdata.imuTime - _epochIMU; //Difference between current epoch and previous
+	_dTimu = IMU._IMUdata.imuTime - lastGroupReadEpoch; //Difference between current epoch and previous
 	// IMU Mechanization
+  //cout << _LLH_o.at(0)*180/PI << " | " << _LLH_o.at(1)*180/PI << endl;
 	MechECEF.MechanizerECEF(_dTimu, IMU._IMUdata.Acc, IMU._IMUdata.Gyr, _LLH_o); //Update ECEF position adding to it accelerometer and gyroscope data (previous data is accumulated)
 	// Update solution
 	_epochIMU = IMU._IMUdata.imuTime; //Update epocIMU with current epoch
@@ -116,6 +119,7 @@ void Loosely::SolutionIMU(ReaderIMU IMU, IMUmechECEF& MechECEF) {
 	IMUsol.velXYZ = MechECEF._vel;		//Update IMU solution
 	IMUsol.attXYZ = MechECEF._att;		//Update IMU solution
 	_Heading_imu = normalise(IMUsol.attXYZ.at(2), 0, 2 * PI);
+	//printf("%lf\n", IMU._IMUdata.imuTime);
 }
 
 VectorXd double2eigVector(double a, double b, double c){
@@ -160,6 +164,51 @@ void* loop_imu_thread(void* arg){
 	}
 }
 
+double radianToDegree(double r) {
+  return r * (180 / PI);
+}
+
+gnss_sol_t ecef2geo(gnss_sol_t gnss){
+    
+    //1
+    // Output vector - Lat, Long, Height
+	// Variables
+	double x, y, z;
+	x = gnss.a; y = gnss.b; z = gnss.c;
+	// Semi Major Axis and Eccentricity
+	const double a = 6378137; const double e = 0.08181979;
+	// Compute Longitude
+	double lambda = atan2(y, x);
+	// Physical radius of the point 
+	double r = sqrt(pow(x, 2) + pow(y, 2) + pow(z, 2));
+	// Radius in the x-y plane 
+	double p = sqrt(pow(x, 2) + pow(y, 2));
+	// GEOcentric latitude (Initial Approx)
+	double phi_o = atan2(p, z); double phi_i = phi_o;
+	// Radius of curvature in the prime vertical
+	double Rn;
+	// Height
+	double h;
+	// Loop
+	for (unsigned i = 0; i < 3; i++) {
+		// Recalculate Radius of curvature in the prime vertical
+		Rn = a / sqrt(1 - (e * e * sin(phi_i) * sin(phi_i)));
+		// Recalculate Height
+		h = (p / cos(phi_i)) - (Rn);
+		// Recalculate Latitude
+		phi_i = atan((z / p) * (pow((1 - ((pow(e, 2))*(Rn / (Rn + h)))), (-1))));
+	}
+	// Recalculate Height
+	h = (p / cos(phi_i)) - Rn;
+	// Populate output vector
+	/* gnss.a = radianToDegree(phi_i);
+	gnss.b = radianToDegree(lambda); */
+	gnss.a = phi_i;
+	gnss.b = lambda;
+	gnss.c = h;
+	return gnss;    
+}
+
 void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 	 /* struct timeval tv;
             gettimeofday(&tv, NULL);
@@ -173,10 +222,14 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 			if(imu_ready == 0 && iniIMU.stepInitializeIMU(OBSimu, IMU_INI_TIME_END, _LLH_o) == 1){ //it calculates _ACCbias and _GYRbias, _RPY
 				_dT = 1.0;
 				// Initialize IMU Mechanization
+        cout << "2-->" << iniIMU._RPY.at(0)*180.0/PI << " | " << iniIMU._RPY.at(0)*180.0/PI << " | " << iniIMU._RPY.at(0)*180.0/PI << endl;
 				MechECEF.InitializeMechECEF(_ECEF_imu, _LLH_o, GNSSsol.velXYZ, iniIMU._RPY, iniIMU._ACCbias, iniIMU._GYRbias); //it initializes MechECEF with _ACCbias, _GYRbias and _RPY
+        
 				imu_ready = 1; //Tells client.c that it can read imu data
 				printf("SEMOR: End initialization\n");
 			}
+			_epochIMU = OBSimu._IMUdata.imuTime;
+			lastGroupReadEpoch = OBSimu._IMUdata.imuTime;
 			read_imu();
 			if(imu_ready == 1){
 				imu_ready = 2;
@@ -187,7 +240,7 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 
 				printf("%lf - %lf - %lf\n", avg_acc_x, avg_acc_y, avg_acc_z);*/
 			}
-			_epochIMU = OBSimu._IMUdata.imuTime;
+			epochAfterRead = OBSimu._IMUdata.imuTime;
 			n++;
 		}
 		//cout << n << endl;
@@ -197,34 +250,32 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 	//IMU is ready:
 
 	//Initialize IMU mechanization with initial position, initial velocity and biases
-	/* _ECEF_o = eigVector2std(double2eigVector((*int_sol).a, (*int_sol).b, (*int_sol).c));
+	/*_ECEF_o = eigVector2std(double2eigVector((*int_sol).a, (*int_sol).b, (*int_sol).c));
 	_LLH_o = eigVector2std(ecef2geo(double2eigVector((*int_sol).a, (*int_sol).b, (*int_sol).c)));	
 	_ECEF_imu = _ECEF_o;
-	GNSSsol.velXYZ = eigVector2std(double2eigVector((*int_sol).va, (*int_sol).vb, (*int_sol).vc)); */
+	GNSSsol.velXYZ = eigVector2std(double2eigVector((*int_sol).va, (*int_sol).vb, (*int_sol).vc));*/
 
-	/*MechECEF._pos.at(0) = (*int_sol).a;
+	MechECEF._pos.at(0) = (*int_sol).a;
 	MechECEF._pos.at(1) = (*int_sol).b;
 	MechECEF._pos.at(2) = (*int_sol).c;
 
 	MechECEF._vel.at(0) = (*int_sol).va;
 	MechECEF._vel.at(1) = (*int_sol).vb;
-	MechECEF._vel.at(2) = (*int_sol).vc;*/
+	MechECEF._vel.at(2) = (*int_sol).vc;
 
-	/* if(1){
+	/*if(1){
 		MechECEF.InitializeMechECEF(_ECEF_imu, _LLH_o, GNSSsol.velXYZ, iniIMU._RPY, iniIMU._ACCbias, iniIMU._GYRbias);
 		first = 0;
-	} */
+	}*/
 	//here we have previous gnss position
 
 
 
 	//print_time();
 	
-	
-
-	double next_time = _epochIMU;
-	double epochAfterRead;
 	double group_time = 0.2;
+	double next_time = epochAfterRead + group_time;
+	//epochAfterRead = _epochIMU;
 
 	double avg_ax = 0, avg_ay = 0, avg_az = 0;
 	double avg_gx = 0, avg_gy = 0, avg_gz = 0;
@@ -250,7 +301,7 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 		nlocal++;
 		//printf("a\n");
 
-		if(_epochIMU >= next_time){
+		if(epochAfterRead >= next_time || epochAfterRead > (*int_sol).time.sec){
 
 			avg_ax /= nlocal;
 			avg_ay /= nlocal;
@@ -260,15 +311,28 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 			avg_gy /= nlocal;
 			avg_gz /= nlocal;
 
-			OBSimu._IMUdata.Ax = avg_ax;
-			OBSimu._IMUdata.Ay = avg_ay;
-			OBSimu._IMUdata.Az = avg_az;
+			OBSimu._IMUdata.Acc.at(0) = avg_ax;
+			OBSimu._IMUdata.Acc.at(1) = avg_ay;
+			OBSimu._IMUdata.Acc.at(2) = avg_az;
 
-			OBSimu._IMUdata.Gx = avg_gx;
-			OBSimu._IMUdata.Gy = avg_gy;
-			OBSimu._IMUdata.Gz = avg_gz;
+			OBSimu._IMUdata.Gyr.at(0) = avg_gx;
+			OBSimu._IMUdata.Gyr.at(1) = avg_gy;
+			OBSimu._IMUdata.Gyr.at(2) = avg_gz;
       
-			SolutionIMU(OBSimu, MechECEF); 
+			gnss_sol_t llh = ecef2geo(*int_sol);
+			_LLH_o = eigVector2std(double2eigVector(llh.a, llh.b, llh.c));
+			SolutionIMU(OBSimu, MechECEF);
+			(*int_sol).a = IMUsol.posXYZ.at(0);
+			(*int_sol).b = IMUsol.posXYZ.at(1);
+			(*int_sol).c = IMUsol.posXYZ.at(2);
+			(*int_sol).va = IMUsol.velXYZ.at(0);
+			(*int_sol).vb = IMUsol.velXYZ.at(1);
+			(*int_sol).vc = IMUsol.velXYZ.at(2);
+
+			lastGroupReadEpoch = OBSimu._IMUdata.imuTime;
+
+      //cout << "gx : " << avg_gx << " gy = " << avg_gy << " gz = " << avg_gz << endl;
+      //cout << "ax : " << avg_ax << " ay = " << avg_ay << " az = " << avg_az << endl;
 
 			//Reset variables for next iterations
 			next_time += group_time;
@@ -280,27 +344,32 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 		_epochIMU = OBSimu._IMUdata.imuTime;
 		read_imu();
 		epochAfterRead = OBSimu._IMUdata.imuTime;
-
-
-	} while (epochAfterRead <= (*int_sol).time.sec);
-		 cout << n << endl;
+	} while (_epochIMU <= (*int_sol).time.sec);
+ 
+		 /*cout << n << endl;
 		cout.flush();
+cout << "---------------------------------------------------" << endl;
+		cout.flush();*/
+	
+   
 	/*if(logs){
 		out << "---------------------------------------------------" << endl;
 		out.flush();
 	}*/ 
 
-	printf("next_time: %lf\n", next_time);
+	//printf("next_time: %lf\n", next_time);
 
-	(*int_sol).a = IMUsol.posXYZ.at(0);
+	/* (*int_sol).a = IMUsol.posXYZ.at(0);
 	(*int_sol).b = IMUsol.posXYZ.at(1);
 	(*int_sol).c = IMUsol.posXYZ.at(2);
 
-	printf("%lf, %lf, %lf\n", (*int_sol).a, (*int_sol).b, (*int_sol).c);
+	//printf("%lf, %lf, %lf\n", (*int_sol).a, (*int_sol).b, (*int_sol).c);
+
+  //cout << "-->" << IMUsol.velXYZ.at(0) << endl;
 
 	(*int_sol).va = IMUsol.velXYZ.at(0);
 	(*int_sol).vb = IMUsol.velXYZ.at(1);
-	(*int_sol).vc = IMUsol.velXYZ.at(2);
+	(*int_sol).vc = IMUsol.velXYZ.at(2); */
 
 	//cout << n << endl;
 	//cout.flush();

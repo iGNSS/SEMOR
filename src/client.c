@@ -483,7 +483,7 @@ void process_solutions(int chk_sols){
     //Output
     if(!is_best_found){
         gnsscopy(&best, sol[IMU]);
-        printf("no best found\n");
+        //printf("no best found\n");
     }
 
     //Here we have the solution
@@ -507,7 +507,8 @@ void process_solutions(int chk_sols){
 
     //Post comparison and output
     //So let's generate the next imu position
-    gnsscopy(&sol[IMU], best);
+
+    //gnsscopy(&sol[IMU], best); DECOMMENTAREEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
     sol[IMU].time.week = 0;
     sol[IMU].time.sec += 1; //Get imu position of the next second
     imu_sol(&sol[IMU]); //this runs at least until raw IMU timestamp < next second

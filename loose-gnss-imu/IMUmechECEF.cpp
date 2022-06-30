@@ -67,6 +67,7 @@ void IMUmechECEF::InitializeMechECEF(vector<double> iniPOS, vector<double> iniLL
 	double LAx = -0.964, LAy = -0.924, LAz = -0.196;
 	_Lxyz = VectorXd::Zero(3);
 	_Lxyz(0) = LAx; _Lxyz(1) = LAy; _Lxyz(2) = LAz;
+ 
 }
 
 // Computes gravitational acceleration ECEF components
@@ -114,16 +115,29 @@ MatrixXd IMUmechECEF::TensorGravGrad(double X, double Y, double Z) {
 // ECEF Mechanization of IMU
 void IMUmechECEF::MechanizerECEF(double dT, vector<double> acc, vector<double> gyr, vector<double> LLH) {
 	// Observation Arrangement
+   
+   /* HUGO */
+   //cout << "ax : " << acc.at(0) << " ; " << "ay : " << acc.at(1) << " ; " << "az : " << acc.at(2) << " | " ;
+   //cout << "gx : " << gyr.at(0) << " ; " << "gy : " << gyr.at(1) << " ; " << "gz : " << gyr.at(2) << endl ;
+   //cout << LLH.at(0) - 0.774923 << " | " << LLH.at(1) - 0.155992 << endl;
+   /* HUGO END */
+   
 	vector<double> fib;
 	fib.push_back(acc.at(0) - _fbias.at(0)); fib.push_back(acc.at(1) - _fbias.at(1)); fib.push_back(acc.at(2) - _fbias.at(2));
 	vector<double> wib;
 	wib.push_back(gyr.at(0) - _gbias.at(0)); wib.push_back(gyr.at(1) - _gbias.at(1)); wib.push_back(gyr.at(2) - _gbias.at(2));
 
+  //cout << fib.at(0) << " ; " << fib.at(1) << " ; " << fib.at(2) << endl;
+  //cout << wib.at(0) << " ; " << wib.at(1) << " ; " << wib.at(2) << endl;
+
 	// --- Constants ---
 	VectorXd om_eie = VectorXd::Zero(3); om_eie(2) = Om;
+  //cout << Om << endl;
 
 	// --- Initializing ---
 	VectorXd Pos0 = VectorXd::Zero(3); Pos0 = std2eigVector(_pos);
+  //cout <<" 1 " << _pos.at(0) << " ; " << _pos.at(1) << " ; " << _pos.at(2) << endl;
+  
 	VectorXd Vel0 = VectorXd::Zero(3); Vel0 = std2eigVector(_vel);
 	VectorXd Att0 = VectorXd::Zero(3); Att0 = std2eigVector(_att);
 	MatrixXd Cbe0 = MatrixXd::Zero(3, 3); Cbe0 = _Cbe;
@@ -149,6 +163,9 @@ void IMUmechECEF::MechanizerECEF(double dT, vector<double> acc, vector<double> g
 	// --- Velocity Update ---
 	VectorXd vel_eeb = VectorXd::Zero(3);
 	vel_eeb = Vel0 + (sf_eib - g_eb - 2 * SkewMat(om_eie) * Vel0) * dT;
+ 
+  //cout <<" 1 " << Vel0(0) << " ; " << Vel0(1) << " ; " << Vel0(2) << endl;
+  //cout <<" 2 " << vel_eeb(0) << " ; " << vel_eeb(1) << " ; " << vel_eeb(2) << endl;
 
 	//cout << sf_eib.transpose() << "\n" << g_eb.transpose() << "\n\n";
 
@@ -166,15 +183,27 @@ void IMUmechECEF::MechanizerECEF(double dT, vector<double> acc, vector<double> g
 	double pitch = euler.at(1);
 	double yaw = euler.at(2);
 	Att0(0) = roll; Att0(1) = pitch; Att0(2) = yaw;
+ 
+ /* HUGO */
+ //Att0(0) = 0.0; Att0(1) = 0.0; Att0(2) = -30.0*PI/180.0;
+ /* HUGO END */
+ 
 	NormaliseAttitudeOnly(Att0);
 
 	// --- Update ---
 	// Attitude
 	_att.clear();
 	_att = eigVector2std(Att0);
+ 
+ 
+  /* HUGO */
+  cout << "roll : " << _att.at(0)*180/PI << " | pitch : " << _att.at(1)*180/PI << " | yaw : " << _att.at(2)*180/PI << endl;
+  /* HUGO END */
+ 
 	// Position
 	_pos.clear();
 	_pos = eigVector2std(pos_eeb);
+  //cout << _pos.at(0) << " ; " << _pos.at(1) << " ; " << _pos.at(2) << endl;
 	// Velocity
 	_vel.clear();
 	_vel = eigVector2std(vel_eeb);
