@@ -118,9 +118,16 @@ void IMUmechECEF::MechanizerECEF(double dT, vector<double> acc, vector<double> g
    
 	vector<double> fib;
 	fib.push_back(acc.at(0) - _fbias.at(0)); fib.push_back(acc.at(1) - _fbias.at(1)); fib.push_back(acc.at(2) - _fbias.at(2));
+ 
+ cout << "Ax : " << fib.at(0) << " Ay : " << fib.at(1) << " Az : " << fib.at(2) << endl ;
+ 
 	vector<double> wib;
 	wib.push_back(gyr.at(0) - _gbias.at(0)); wib.push_back(gyr.at(1) - _gbias.at(1)); wib.push_back(gyr.at(2) - _gbias.at(2));
-  cout << wib.at(2) << endl;
+ 
+ cout << "Gx : " << wib.at(0) << " Gy : " << wib.at(1) << " Gz : " << wib.at(2) << endl ;
+
+  
+
 	// --- Constants ---
 	VectorXd om_eie = VectorXd::Zero(3); om_eie(2) = Om;
 
@@ -162,20 +169,31 @@ void IMUmechECEF::MechanizerECEF(double dT, vector<double> acc, vector<double> g
 	// --- Compute Roll Pitch Yaw ---
 	MatrixXd Cen = MatrixXd::Zero(3, 3);
 	Cen = ecef2llfDCM(LLH.at(0), LLH.at(1));
+  cout << "Cen " << endl <<  Cen << endl;
 	_Cbn = MatrixXd::Zero(3, 3);
+  cout << "Cbn " << endl  << _Cbn << endl;
 	_Cbn = Cen * Cbe;
+  cout << "Cbn " << endl  << _Cbn << endl;
 	vector<double> euler; euler = dcm2euler(_Cbn.transpose());
 	double roll = euler.at(0);
+ cout << "roll " <<  roll << endl;
 	double pitch = euler.at(1);
+ cout << "pitch " <<  pitch << endl;
 	double yaw = euler.at(2);
+ cout << "yaw " << yaw << endl;
 	Att0(0) = roll; Att0(1) = pitch; Att0(2) = yaw;
  
 	NormaliseAttitudeOnly(Att0);
+ cout << "roll " << Att0(0) << endl;
+ cout << "pitch " << Att0(1) << endl;
+ cout << "yaw "  << Att0(2) << endl;
+ cout << "----------------------------------" << endl << endl;
 	// --- Update ---
 	// Attitude
 	_att.clear();
 	_att = eigVector2std(Att0);
  
+  //cout << "r : " << _att.at(0)*180.0/PI << " | p : " << _att.at(1)*180.0/PI << " | y : " << _att.at(2)*180.0/PI << endl;
 	// Position
 	_pos.clear();
 	_pos = eigVector2std(pos_eeb);

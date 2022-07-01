@@ -1,5 +1,6 @@
 *.txt
 *.log
+*.ubx
 test1.pos
 test2.pos
 rtkrcv.nav
