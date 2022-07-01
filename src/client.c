@@ -373,15 +373,23 @@ void process_solutions(int chk_sols){
         case 0: //no solutions, return
             return;
         case 1: //only GPS
+            printf("Ony RTK for epoch: %d\n", sol[GPS].time.sec);
             gnsscopy(&best, sol[GPS]);
             is_best_found = 1;
             break;
         case 2: // only GALILEO
+        printf("Ony RTK for epoch: %d\n", sol[GALILEO].time.sec);
             gnsscopy(&best, sol[GALILEO]);
             is_best_found = 1;
             break;
         case 3: //GPS and GALILEO
             is_best_found = get_best_sol2(GPS, GALILEO);
+            if(is_best_found){
+                printf("Both RTK and PPPfor epoch: %d, similar\n", sol[GPS].time.sec);
+            }
+            else{
+                printf("Both RTK and PPPfor epoch: %d, NOT similar\n", sol[GPS].time.sec);
+            }
             best.time.week = sol[GPS].time.week;
             best.time.sec = sol[GPS].time.sec;
             break;
