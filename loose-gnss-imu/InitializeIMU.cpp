@@ -58,6 +58,9 @@ int InitializeIMU::stepInitializeIMU(ReaderIMU OBSimu, double EndTime, vector<do
 	// Compute rough estimate of Yaw
 	double numer = -Gx_avg / c; double denom = Gy_avg / c;
 	double yaw = atan(numer / denom);
+ 
+   cout << "yaw_0 : " << yaw*180.0/PI << endl;
+ 
 	// Gravity components ECEF
 	MatrixXd Cbe(3, 3); Cbe.setZero(); Cbe = b2eDCM(LLH.at(0), LLH.at(1), 0, 0, yaw);
 	MatrixXd Cne(3, 3); Cne.setZero(); Cne = llf2ecefDCM(LLH.at(0), LLH.at(1));
@@ -96,14 +99,28 @@ int InitializeIMU::stepInitializeIMU(ReaderIMU OBSimu, double EndTime, vector<do
 
 	// *** As per Paul Groves' Textbook
 	// Compute Roll and Pitch
-	_roll = atan2(-Ay_avg, Az_avg);
+  _roll = atan2(-Ay_avg, Az_avg);
 	_pitch = atan(-Ax_avg / (sqrt(pow(Ay_avg, 2) + pow(Az_avg, 2))));
+  /* HUGO 
+  _pitch = atan(Ax_avg / (sqrt(pow(Ay_avg, 2) + pow(Az_avg, 2))));
+  _roll  = atan(Ay_avg / (sqrt(pow(Ax_avg, 2) + pow(Az_avg, 2))));
+  /* HUGO END */
+ 
 	// Compute Yaw
 	double num = -Gy_avg * cos(_roll) + Gz_avg * sin(_roll);
 	double den = Gx_avg * cos(_pitch) + Gy_avg * sin(_pitch) * sin(_roll) + Gz_avg * cos(_roll) * sin(_pitch);
 	_yaw = atan2(num, den);
 	// Add roll pitch yaw to vector
 	_RPY.push_back(_roll); _RPY.push_back(_pitch); _RPY.push_back(_yaw);
+ 
+  //cout << "r : " << _roll*180.0/PI << " p : " << _pitch*180.0/PI << " y : " << _yaw*180.0/PI << endl;
+  //cout << "0-->" << _RPY.at(0)*180.0/PI << " | " << _RPY.at(1)*180.0/PI << " | " << _RPY.at(2)*180.0/PI << endl;
+  
+  //cout << "_ACCbias : " << _ACCbias.at(0) << " | " << _ACCbias.at(1) << " | " << _ACCbias.at(2) << endl;
+  //cout << "_GYRbias : " << _GYRbias.at(0) << " | " << _GYRbias.at(1) << " | " << _GYRbias.at(2) << endl;
+  //cout << "_RPY     : " << _RPY.at(0)*180.0/PI << " | " << _RPY.at(1)*180.0/PI << " | " << _RPY.at(2)*180.0/PI << endl;
+  
+  
 	return 1;
 }
 

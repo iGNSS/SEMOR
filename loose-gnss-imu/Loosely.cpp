@@ -111,7 +111,7 @@ void Loosely::SolutionIMU(ReaderIMU IMU, IMUmechECEF& MechECEF) {
 	// Compute time interval
 	_dTimu = IMU._IMUdata.imuTime - lastGroupReadEpoch; //Difference between current epoch and previous
 	// IMU Mechanization
-  //cout << _LLH_o.at(0)*180/PI << " | " << _LLH_o.at(1)*180/PI << endl;
+  //cout << "2-->" << iniIMU._RPY.at(0)*180.0/PI << " | " << iniIMU._RPY.at(0)*180.0/PI << " | " << iniIMU._RPY.at(0)*180.0/PI << endl;
 	MechECEF.MechanizerECEF(_dTimu, IMU._IMUdata.Acc, IMU._IMUdata.Gyr, _LLH_o); //Update ECEF position adding to it accelerometer and gyroscope data (previous data is accumulated)
 	// Update solution
 	_epochIMU = IMU._IMUdata.imuTime; //Update epocIMU with current epoch
@@ -220,9 +220,9 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 		int n = 0;
 		while(/* n < 104 */ OBSimu._IMUdata.imuTime < (*int_sol).time.sec){ //read whole imu date of a particular gnss epoch
 			if(imu_ready == 0 && iniIMU.stepInitializeIMU(OBSimu, IMU_INI_TIME_END, _LLH_o) == 1){ //it calculates _ACCbias and _GYRbias, _RPY
-				_dT = 1.0;
+				//_dT = 1.0;
 				// Initialize IMU Mechanization
-        cout << "2-->" << iniIMU._RPY.at(0)*180.0/PI << " | " << iniIMU._RPY.at(0)*180.0/PI << " | " << iniIMU._RPY.at(0)*180.0/PI << endl;
+        //cout << "1-->" << iniIMU._RPY.at(0)*180.0/PI << " | " << iniIMU._RPY.at(0)*180.0/PI << " | " << iniIMU._RPY.at(0)*180.0/PI << endl;
 				MechECEF.InitializeMechECEF(_ECEF_imu, _LLH_o, GNSSsol.velXYZ, iniIMU._RPY, iniIMU._ACCbias, iniIMU._GYRbias); //it initializes MechECEF with _ACCbias, _GYRbias and _RPY
         
 				imu_ready = 1; //Tells client.c that it can read imu data
@@ -321,6 +321,9 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
       
 			gnss_sol_t llh = ecef2geo(*int_sol);
 			_LLH_o = eigVector2std(double2eigVector(llh.a, llh.b, llh.c));
+      
+      //cout << avg_gz << endl ;
+      
 			SolutionIMU(OBSimu, MechECEF);
 			(*int_sol).a = IMUsol.posXYZ.at(0);
 			(*int_sol).b = IMUsol.posXYZ.at(1);
