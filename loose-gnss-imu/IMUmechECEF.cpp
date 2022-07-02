@@ -119,12 +119,12 @@ void IMUmechECEF::MechanizerECEF(double dT, vector<double> acc, vector<double> g
 	vector<double> fib;
 	fib.push_back(acc.at(0) - _fbias.at(0)); fib.push_back(acc.at(1) - _fbias.at(1)); fib.push_back(acc.at(2) - _fbias.at(2));
  
- cout << "Ax : " << fib.at(0) << " Ay : " << fib.at(1) << " Az : " << fib.at(2) << endl ;
+ //cout << "Ax : " << fib.at(0) << " Ay : " << fib.at(1) << " Az : " << fib.at(2) << endl ;
  
 	vector<double> wib;
 	wib.push_back(gyr.at(0) - _gbias.at(0)); wib.push_back(gyr.at(1) - _gbias.at(1)); wib.push_back(gyr.at(2) - _gbias.at(2));
  
- cout << "Gx : " << wib.at(0) << " Gy : " << wib.at(1) << " Gz : " << wib.at(2) << endl ;
+ //cout << "Gx : " << wib.at(0) << " Gy : " << wib.at(1) << " Gz : " << wib.at(2) << endl ;
 
   
 
@@ -169,25 +169,25 @@ void IMUmechECEF::MechanizerECEF(double dT, vector<double> acc, vector<double> g
 	// --- Compute Roll Pitch Yaw ---
 	MatrixXd Cen = MatrixXd::Zero(3, 3);
 	Cen = ecef2llfDCM(LLH.at(0), LLH.at(1));
-  cout << "Cen " << endl <<  Cen << endl;
+  //cout << "Cen " << endl <<  Cen << endl;
 	_Cbn = MatrixXd::Zero(3, 3);
-  cout << "Cbn " << endl  << _Cbn << endl;
+  //cout << "Cbn " << endl  << _Cbn << endl;
 	_Cbn = Cen * Cbe;
-  cout << "Cbn " << endl  << _Cbn << endl;
+  //cout << "Cbn " << endl  << _Cbn << endl;
 	vector<double> euler; euler = dcm2euler(_Cbn.transpose());
 	double roll = euler.at(0);
- cout << "roll " <<  roll << endl;
+ //cout << "roll " <<  roll << endl;
 	double pitch = euler.at(1);
- cout << "pitch " <<  pitch << endl;
+ //cout << "pitch " <<  pitch << endl;
 	double yaw = euler.at(2);
- cout << "yaw " << yaw << endl;
+ //cout << "yaw " << yaw << endl;
 	Att0(0) = roll; Att0(1) = pitch; Att0(2) = yaw;
  
 	NormaliseAttitudeOnly(Att0);
- cout << "roll " << Att0(0) << endl;
+ /*cout << "roll " << Att0(0) << endl;
  cout << "pitch " << Att0(1) << endl;
  cout << "yaw "  << Att0(2) << endl;
- cout << "----------------------------------" << endl << endl;
+ cout << "----------------------------------" << endl << endl;*/
 	// --- Update ---
 	// Attitude
 	_att.clear();
@@ -197,9 +197,11 @@ void IMUmechECEF::MechanizerECEF(double dT, vector<double> acc, vector<double> g
 	// Position
 	_pos.clear();
 	_pos = eigVector2std(pos_eeb);
+  //cout << _pos.at(0)-4509156.898700 << " ; " << _pos.at(1)-709152.685500 << " ; " << _pos.at(2)-4440014.786000 << endl;
 	// Velocity
 	_vel.clear();
 	_vel = eigVector2std(vel_eeb);
+ cout << _vel.at(0) << " ; " << _vel.at(1) << " ; " << _vel.at(2) << endl;
 	// Body to Earth DCM
 	_Cbe = Cbe;
 	// Specific Force in earth frame

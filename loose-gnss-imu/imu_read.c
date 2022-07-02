@@ -557,7 +557,7 @@ int get_imu_data(char line[IMU_LENGTH]){
 				/*ax*acclUnits*gravity, ay*acclUnits*gravity, az*acclUnits*gravity,
 				gx*gyroUnits, gy*gyroUnits, gz*gyroUnits, stamp, n);*/
         -ax*acclUnits*gravity, -ay*acclUnits*gravity, -az*acclUnits*gravity,
-				gx*gyroUnits, gy*gyroUnits, gz*gyroUnits, stamp, n);
+				gx*gyroUnits*3.1415926535898/180.0, gy*gyroUnits*3.1415926535898/180.0, gz*gyroUnits*3.1415926535898/180.0, stamp, n);
 			
 			last_stamp = stamp;
 

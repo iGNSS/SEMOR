@@ -289,13 +289,13 @@ void Loosely::get_imu_sol(gnss_sol_t* int_sol){
 		//_epochIMU = OBSimu._IMUdata.imuTime;
 		n++; */
 
-		avg_ax +=OBSimu._IMUdata.Ax;
-		avg_ay +=OBSimu._IMUdata.Ay;
-		avg_az +=OBSimu._IMUdata.Az;
+		avg_ax +=OBSimu._IMUdata.Acc.at(0);
+		avg_ay +=OBSimu._IMUdata.Acc.at(1);
+		avg_az +=OBSimu._IMUdata.Acc.at(2);
 
-		avg_gx +=OBSimu._IMUdata.Gx;
-		avg_gy +=OBSimu._IMUdata.Gy;
-		avg_gz +=OBSimu._IMUdata.Gz;
+		avg_gx +=OBSimu._IMUdata.Gyr.at(0) ;
+		avg_gy +=OBSimu._IMUdata.Gyr.at(1) ;
+		avg_gz +=OBSimu._IMUdata.Gyr.at(2) ;
 
 		n++;
 		nlocal++;

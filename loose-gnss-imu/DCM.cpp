@@ -10,6 +10,7 @@
 using namespace std;
 using namespace Eigen;
 
+
 // PI
 const double PI = 3.1415926535898;
 
@@ -65,8 +66,15 @@ MatrixXd e2bDCM(double lat, double lon, double r, double p, double y) {
 // Find roll pitch yaw in radians, given enu2b1 DCM
 vector<double> dcm2euler(Eigen::MatrixXd Cnb) {
 	double roll = atan(Cnb(1, 2) / Cnb(2, 2));
+  //double roll = atan2(-Cnb(2,0),Cnb(2,2));
+ 
 	double pitch = asin(-Cnb(0, 2));
+  //double pitch = asin(Cnb(2,1));
+  
 	double yaw = atan(Cnb(0, 1) / Cnb(0, 0));
+  //double yaw = atan2(-Cnb(0,1),Cnb(1,1));
+  
+ 
 	vector<double> rpy;
 	rpy.push_back(roll); rpy.push_back(pitch); rpy.push_back(yaw);
 	return rpy;
